@@ -8,10 +8,8 @@ offline:false to get the exact same flow driven by PlayerAgent's FSM.
 
 from __future__ import annotations
 
-import math
 import random
 
-from .models import Mob
 from .state import GameState
 from . import state as S
 
@@ -23,18 +21,22 @@ class LocalDirector:
         self.gs = gs
         self.pending = 0      # mobs still alive (mirror)
         self.boss_active = False
-        self.tick = 0.0
         self.attack_cd = 0.0
 
     def update(self, dt: float, intents: list[dict]) -> None:
-        """Process pygame intents + simulated behaviours each frame."""
+        """Process pygame intents + boss attack decisions each frame.
+
+        Mob/boss movement and player harm are resolved in the pygame loop
+        (rpg/enemies.py + rpg/combat.py); the director only decides
+        high-level flow: waves, boss spawns, boss attack picks, rewards.
+        """
         gs = self.gs
         for ev in intents:
             t = ev.get("type")
             if t == "start_game":
                 gs.start_game()
-            elif t == "interact" and gs.phase == S.HOME_BASE:
-                self._home_interact(ev)
+            elif t == "interact":
+                self._interact(ev)
             elif t == "mob_died":
                 gs.apply(ev)
                 self.pending -= 1
@@ -45,20 +47,15 @@ class LocalDirector:
             elif t == "boss_died":
                 gs.apply(ev)
                 self.boss_active = False
-        # 'PeriodicBehaviour' analogue: AI tick every 0.5s.
-        self.tick += dt
-        if self.tick >= 0.5:
-            self.tick = 0.0
-            self._ai_tick()
-        # 'TimeoutBehaviour' analogue: boss attack every 2.5s.
+        # 'TimeoutBehaviour' analogue: pick a boss attack every
+        # 2.5s scaled by the current phase's cooldown multiplier.
         if self.boss_active:
             self.attack_cd += dt
-            if self.attack_cd >= 2.5:
+            boss = gs.boss
+            if boss and boss.alive and self.attack_cd >= 2.5 * boss.cd_mult():
                 self.attack_cd = 0.0
-                boss = gs.boss
-                if boss and boss.alive:
-                    gs.apply({"type": "enemy_attack", "id": "boss",
-                              "damage": boss.attack})
+                gs.apply({"type": "boss_attack",
+                          "name": random.choice(boss.attack_list())})
         # Death -> GAME_OVER handled inside GameState.apply (enemy_attack).
         if gs.phase == S.GAME_OVER:
             gs.phase = S.HOME_BASE
@@ -71,8 +68,12 @@ class LocalDirector:
                 gs.enter_area("home")
                 gs.phase = S.HOME_BASE
 
-    # ------------------------------------------------------------- internals
-    def _home_interact(self, ev: dict) -> None:
+    def _interact(self, ev: dict) -> None:
+        """Local stand-in for WorldAgent: portals spawn waves, exits retreat.
+
+        Bed/door/station/trophy handling is purely view-side in main.py; only
+        things the agent side must own (mob waves, boss spawns) come here.
+        """
         gs = self.gs
         kind = ev.get("kind")
         if kind == "portal":
@@ -80,33 +81,14 @@ class LocalDirector:
             conf = gs.data["areas"].get(area)
             if not conf:
                 return
+            req = conf.get("requires")
+            if req and req not in gs.inv.collected_bosses:
+                boss_name = gs.data["bosses"].get(req, {}).get("name", req)
+                gs.log(f"Portal sealed: defeat {boss_name} first.")
+                return
             self.pending = conf.get("mob_count", 3)
             gs.apply({"type": "phase", "phase": S.AREA_MOBS, "area": area})
             gs.apply({"type": "spawn_mobs", "area": area,
                       "count": conf.get("mob_count", 3)})
-        elif kind == "chest":
-            gs.log("Chest: +20 gold! (TODO: real loot table)")
-            gs.inv.add_gold(20)
-        elif kind == "trophy":
-            gs.log(f"Trophy room: {', '.join(gs.inv.collected_bosses) or 'empty'}")
         elif kind == "exit":
             gs.apply({"type": "phase", "phase": S.HOME_BASE, "area": "home"})
-
-    def _ai_tick(self) -> None:
-        """Move living mobs toward the player (EnemyAgent analogue)."""
-        gs, p = self.gs, self.gs.player
-        for m in gs.mobs:
-            if not m.alive:
-                continue
-            dx, dy = p.x - m.x, p.y - m.y
-            d = math.hypot(dx, dy) or 1.0
-            step = m.speed * 0.25
-            gs.scene.move(m, dx / d * step, dy / d * step)
-            if d < 28 and random.random() < 0.4:  # contact attack
-                gs.apply({"type": "enemy_attack", "id": m.id, "damage": m.attack})
-        boss = gs.boss
-        if boss and boss.alive:
-            dx, dy = p.x - boss.x, p.y - boss.y
-            d = math.hypot(dx, dy) or 1.0
-            gs.scene.move(boss, dx / d * boss.speed * 0.15,
-                          dy / d * boss.speed * 0.15)

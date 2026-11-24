@@ -112,7 +112,10 @@ class HomeBaseState(BaseState):
                 self.to_game({"type": "message", "text": "Upgrade menu open."})
                 self.set_next_state("UPGRADE")
             elif kind == "chest":
-                self.to_game({"type": "message", "text": "Chest: empty (TODO loot)"})
+                # Chest storage is a view-side UI (two-pane transfer, see
+                # GameState.open_chest_ui in rpg/state.py).
+                self.to_game({"type": "message",
+                              "text": "Chest storage opens from the view."})
             elif kind == "trophy":
                 self.to_game({"type": "message", "text": "Trophy room (see HUD)."})
 

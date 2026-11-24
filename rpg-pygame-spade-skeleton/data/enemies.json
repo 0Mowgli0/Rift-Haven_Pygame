@@ -1,6 +1,6 @@
 {
-  "slime": {"name": "Fire Slime", "hp": 20, "attack": 4, "defense": 0, "speed": 40, "gold": 5, "sprite": "slime.png", "color": [230, 120, 40]},
-  "bat": {"name": "Cave Bat", "hp": 12, "attack": 6, "defense": 0, "speed": 90, "gold": 7, "sprite": "bat.png", "color": [140, 90, 180]},
-  "lava_imp": {"name": "Lava Imp", "hp": 18, "attack": 7, "defense": 1, "speed": 70, "gold": 10, "sprite": "lava_imp.png", "color": [220, 70, 60]},
-  "skeleton_grunt": {"name": "Skeleton Grunt", "hp": 16, "attack": 5, "defense": 2, "speed": 55, "gold": 8, "sprite": "skeleton_grunt.png", "color": [220, 210, 180]}
+  "fire_slime": {"name": "Fire Slime", "hp": 20, "attack": 4, "defense": 0, "speed": 40, "gold": 5, "sprite": "fire_slime.png", "color": [230, 120, 40], "behavior": "charger"},
+  "cave_bat": {"name": "Cave Bat", "hp": 12, "attack": 6, "defense": 0, "speed": 90, "gold": 7, "sprite": "cave_bat.png", "color": [140, 90, 180], "behavior": "swoop"},
+  "lava_imp": {"name": "Lava Imp", "hp": 18, "attack": 7, "defense": 1, "speed": 70, "gold": 10, "sprite": "lava_imp.png", "color": [220, 70, 60], "behavior": "caster", "ranged": {"sprite": "fireball.png", "speed": 260, "cooldown": 2.0}},
+  "skeleton_grunt": {"name": "Skeleton Grunt", "hp": 16, "attack": 5, "defense": 2, "speed": 55, "gold": 8, "sprite": "skeleton_grunt.png", "color": [220, 210, 180], "behavior": "melee"}
 }

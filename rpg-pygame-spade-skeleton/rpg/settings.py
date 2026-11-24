@@ -30,8 +30,17 @@ class Settings:
     height: int = 720
     fps: int = 60
     tile: int = 32
+    # Render scale: Stardew proportions (~2 tiles tall on a 32px tile).
+    player_height: int = 72
+    enemy_height: int = 64
+    boss_height: int = 192
+    hitbox_scale: float = 0.6  # collision box < sprite so movement feels fair
     offline: bool = True
     debug: bool = True
+    # Placeholder settings page values (audio binds come with later phases).
+    volume: float = 0.7
+    fullscreen: bool = False
+    difficulty: str = "normal"  # TODO: affect stats only in a later phase
     # XMPP credentials (loaded from .env; NEVER hardcoded).
     jids: dict[str, str] = field(default_factory=dict)
     passwords: dict[str, str] = field(default_factory=dict)
@@ -48,7 +57,7 @@ def _load_xmpp_env(cfg: Settings) -> None:
     user = os.getenv("XMPP_USER", "")
     server = os.getenv("XMPP_SERVER", "")
     pwd = os.getenv("XMPP_PASSWORD", "")
-    roles = ("player", "world", "enemy", "shop")
+    roles = ("player", "world", "enemy", "shop", "save")
     for role in roles:
         jid = os.getenv(f"XMPP_{role.upper()}", "")
         p = os.getenv(f"XMPP_{role.upper()}_PASSWORD", "")
@@ -67,10 +76,20 @@ def load_settings() -> Settings:
     cfg_path = ROOT / "config.yaml"
     if cfg_path.exists():
         raw = yaml.safe_load(cfg_path.read_text()) or {}
-        s.width = raw.get("window", {}).get("width", s.width)
-        s.height = raw.get("window", {}).get("height", s.height)
-        s.fps = raw.get("window", {}).get("fps", s.fps)
+        win = raw.get("window", {})
+        s.width = win.get("width", s.width)
+        s.height = win.get("height", s.height)
+        s.fps = win.get("fps", s.fps)
         s.tile = raw.get("tile", s.tile)
+        rnd = raw.get("render", {})
+        s.player_height = rnd.get("player_height", s.player_height)
+        s.enemy_height = rnd.get("enemy_height", s.enemy_height)
+        s.boss_height = rnd.get("boss_height", s.boss_height)
+        s.hitbox_scale = rnd.get("hitbox_scale", s.hitbox_scale)
+        opt = raw.get("settings", {})
+        s.volume = opt.get("volume", s.volume)
+        s.fullscreen = opt.get("fullscreen", s.fullscreen)
+        s.difficulty = opt.get("difficulty", s.difficulty)
         s.offline = bool(raw.get("offline", s.offline))
         s.debug = bool(raw.get("debug", s.debug))
     _load_xmpp_env(s)
@@ -85,4 +104,12 @@ def load_data(name: str) -> dict:
 
 def load_all_data() -> dict[str, dict]:
     """Load every data file once; new content only requires new JSON entries."""
-    return {n: load_data(n) for n in ("enemies", "bosses", "weapons", "areas")}
+    return {n: load_data(n) for n in
+            ("enemies", "bosses", "weapons", "areas", "characters", "items",
+             "npcs")}
+
+
+def load_npcs() -> tuple[list[dict], dict]:
+    """NPC definitions + dialogue lines (data/npcs.json), needed by world+ui."""
+    raw = load_data("npcs")
+    return raw.get("npcs", []), raw.get("dialogue", {})

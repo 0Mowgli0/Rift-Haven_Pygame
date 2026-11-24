@@ -1,0 +1,59 @@
+{
+  "npcs": [
+    {"id": "elder", "name": "Elder Maren", "sprite": "npc_elder.png",
+     "scene": "home", "x": 7, "y": 15, "color": [180, 160, 120],
+     "lines": ["intro", "boss_hint"]},
+    {"id": "blacksmith", "name": "Smith Torvald", "sprite": "npc_blacksmith.png",
+     "scene": "home", "x": 26, "y": 15, "color": [150, 90, 60],
+     "lines": ["smith_intro", "smith_upgrade"]},
+    {"id": "scout", "name": "Scout Lira", "sprite": "npc_scout.png",
+     "scene": "outside", "x": 12, "y": 14, "color": [90, 160, 90],
+     "lines": ["scout_intro", "scout_portals"]},
+    {"id": "prisoner", "name": "Chained Rogue", "sprite": "npc_prisoner.png",
+     "scene": "green_cave", "x": 4, "y": 5, "color": [120, 120, 130],
+     "lines": ["prisoner_found", "prisoner_free"],
+     "rescue_after_boss": "magma_golem", "unlocks": "rogue"}
+  ],
+  "dialogue": {
+    "intro": {
+      "speaker": "Elder Maren",
+      "text": "The rifts tear wider every night. Centers of us are gone; the town counts on you now.",
+      "next": "boss_hint"
+    },
+    "boss_hint": {
+      "speaker": "Elder Maren",
+      "text": "Old tales speak of a Magma Golem deep in the caves. Strike when it stops glowing!",
+      "next": ""
+    },
+    "smith_intro": {
+      "speaker": "Smith Torvald",
+      "text": "Bring me gold and I will temper steel. Use my station whenever you like.",
+      "next": "smith_upgrade"
+    },
+    "smith_upgrade": {
+      "speaker": "Smith Torvald",
+      "text": "Heart, arm, shield, boots - any of them can be made better. Even your weapons.",
+      "next": ""
+    },
+    "scout_intro": {
+      "speaker": "Scout Lira",
+      "text": "Each portal leads to one of the rift scars. Locked ones open only after their keeper falls.",
+      "next": "scout_portals"
+    },
+    "scout_portals": {
+      "speaker": "Scout Lira",
+      "text": "There is always a way back home - the blue return portal never closes.",
+      "next": ""
+    },
+    "prisoner_found": {
+      "speaker": "Chained Rogue",
+      "text": "Whoever you are... the golem's chains hold me. Break the beast and I'm free.",
+      "next": ""
+    },
+    "prisoner_free": {
+      "speaker": "Vex",
+      "text": "Free at last! These daggers and I owe you one. Take care out there.",
+      "next": ""
+    }
+  }
+}

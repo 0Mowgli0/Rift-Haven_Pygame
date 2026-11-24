@@ -5,6 +5,22 @@ window:
   fps: 60
 tile: 32
 
+# Sprite render heights (px) on a 1280x720 screen; sprites are scaled
+# proportionally to keep their aspect ratio. Stardew Valley proportions:
+# characters ~2 tiles tall (tile=32 -> player ~72px), enemies a bit shorter,
+# bosses imposing (6 tiles). Collision boxes are hitbox_scale * sprite size.
+render:
+  player_height: 72
+  enemy_height: 64
+  boss_height: 192
+  hitbox_scale: 0.6
+
+# Values surfaced in the Settings screen (saving comes with the save system).
+settings:
+  volume: 0.7
+  fullscreen: false
+  difficulty: normal   # placeholder for a later phase
+
 # run without XMPP (local director instead of SPADE agents).
 # Set to false and configure .env for the full multi-agent mode.
 offline: true

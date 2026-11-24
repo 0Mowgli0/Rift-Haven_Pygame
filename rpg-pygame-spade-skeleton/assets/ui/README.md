@@ -1,1 +1,0 @@
-# drop PNGs here

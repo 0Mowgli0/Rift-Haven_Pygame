@@ -18,6 +18,7 @@ class Stats:
     attack: int = 10
     defense: int = 2
     speed: int = 160  # px/s
+    shown_hp: float = -1.0  # lerped value for smooth HP bar animation
 
     def upgrade(self, stat: str, amount: int = 10) -> None:
         """Increment one stat by `amount`."""
@@ -69,6 +70,13 @@ class Mob:
     color: tuple[int, int, int]
     vx: float = 0.0
     vy: float = 0.0
+    flash: float = 0.0          # seconds of white hit-flash left
+    shown_hp: float = -1.0      # lerped value for smooth HP bar animation
+    behavior: str = "melee"     # charger | swoop | caster | melee (enemies.json)
+    ranged: dict = field(default_factory=dict)  # caster config (imp fireball)
+    tel: float = 0.0            # attack windup / charge telegraph, seconds
+    charge: float = 0.0         # remaining charge-sprint time
+    atk_cd: float = 0.0         # contact-cast attack cooldown
 
     @property
     def alive(self) -> bool:
@@ -77,8 +85,27 @@ class Mob:
 
 @dataclass
 class Boss(Mob):
-    """A boss; also may drop a weapon (see data/bosses.json)."""
+    """A boss; may drop a weapon and gains attack phases (data/bosses.json)."""
     weapon: str | None = None
+    phases: list[dict] = field(default_factory=list)  # {"at", "line", "attacks"}
+    phase_idx: int = 0
+    tel_name: str = ""          # attack being telegraphed ("slam"/"burst")
+    tel_radius: float = 0.0
+    intro: str = ""             # spoken line at fight start
+
+    def cd_mult(self) -> float:
+        """Attack-interval multiplier for the current phase."""
+        if not self.phases:
+            return 1.0
+        i = min(self.phase_idx, len(self.phases) - 1)
+        return self.phases[i].get("cooldown_mult", 1.0)
+
+    def attack_list(self) -> list[str]:
+        """Attacks available in the current phase."""
+        if not self.phases:
+            return ["slam"]
+        i = min(self.phase_idx, len(self.phases) - 1)
+        return self.phases[i].get("attacks", ["slam"])
 
     @classmethod
     def from_data(cls, bid: str, data: dict, x: float, y: float) -> "Boss":
@@ -89,6 +116,8 @@ class Boss(Mob):
             speed=data["speed"], gold=data["gold"],
             color=tuple(data.get("color", (255, 80, 80))),
             weapon=data.get("weapon"),
+            phases=data.get("phases", []),
+            intro=data.get("dialogue", ""),
         )
 
 
@@ -99,6 +128,7 @@ class Player:
     y: float
     stats: Stats = field(default_factory=Stats)
     facing: int = 0  # 0 down, 1 up, 2 left, 3 right
+    flash: float = 0.0  # white hit-flash after taking damage
 
 
 def make_mob(mid: int, kind: str, data: dict, x: float, y: float) -> Mob:
@@ -110,4 +140,6 @@ def make_mob(mid: int, kind: str, data: dict, x: float, y: float) -> Mob:
         attack=data["attack"], defense=data["defense"],
         speed=data["speed"], gold=data["gold"],
         color=tuple(data.get("color", (200, 200, 80))),
+        behavior=data.get("behavior", "melee"),
+        ranged=data.get("ranged", {}),
     )

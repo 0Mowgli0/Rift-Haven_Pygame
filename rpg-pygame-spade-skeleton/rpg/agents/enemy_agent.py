@@ -11,6 +11,7 @@ One EnemyAgent instance per running game. It demonstrates:
 from __future__ import annotations
 
 import math
+import random
 
 import spade
 from spade.behaviour import CyclicBehaviour, OneShotBehaviour, \
@@ -62,20 +63,25 @@ class AiTick(PeriodicBehaviour):
 
 
 class BossAttack(TimeoutBehaviour):
-    """TimeoutBehaviour example: boss attacks once the cooldown elapses,
-    then re-arms itself with a fresh TimeoutBehaviour."""
+    """TimeoutBehaviour example: the boss telegraphs one attack once the
+    phase-scaled cooldown elapses, then re-arms a fresh TimeoutBehaviour."""
 
-    def __init__(self, agent: EnemyAgent, timeout: float, damage: int) -> None:
+    def __init__(self, agent: EnemyAgent, timeout: float) -> None:
         super().__init__(timeout=timeout)
         self.agent = agent
-        self.damage = damage
 
     async def run(self) -> None:
-        self.agent.bridge.send_to_game(
-            {"type": "enemy_attack", "id": "boss", "damage": self.damage})
-        # Cooldown over -> re-arm (the FSM/agent would do this when a boss
-        # is alive; kept simple here).
-        self.agent.add_behaviour(BossAttack(self.agent, BOSS_CD, self.damage))
+        boss = self.agent.active_boss
+        if boss:
+            # Random attack from the current phase's attack list; the
+            # telegraph itself is resolved inside the pygame loop.
+            name = random.choice(Boss.boss_phase(boss, boss["hp"]).attacks)
+            self.agent.bridge.send_to_game(
+                {"type": "boss_attack", "name": name})
+            cd = BOSS_CD * Boss.cd_mult(boss["hp"], d["phases"])
+            self.agent.add_behaviour(BossAttack(self.agent, cd))
+        else:
+            self.agent.add_behaviour(BossAttack(self.agent, BOSS_CD))
 
 
 class DropLoot(OneShotBehaviour):
@@ -120,10 +126,19 @@ class RequestListener(CyclicBehaviour):
         elif t == "spawn_boss":
             bid = body["boss"]
             d = self.agent.data["bosses"][bid]
+            self.agent.active_boss = {
+                "id": bid, "hp": d["hp"], "max_hp": d["hp"],
+                "phases": d.get("phases", [])}
             self.agent.bridge.send_to_game(
                 {"type": "spawn_boss", "area": body["area"], "boss": bid})
             # Start the boss attack cooldown as a TimeoutBehaviour.
-            self.agent.add_behaviour(BossAttack(self.agent, BOSS_CD, d["attack"]))
+            self.agent.add_behaviour(BossAttack(self.agent, BOSS_CD))
+        elif t == "boss_hit":
+            # Game echoes boss hits back with remaining hp: update mirror.
+            if self.agent.active_boss:
+                self.agent.active_boss["hp"] = body.get("hp", 0)
+        elif t == "boss_died":
+            self.agent.active_boss = None
         elif t == "mob_died":
             # One-off loot drop behaviour.
             mid = body.get("id", "?")

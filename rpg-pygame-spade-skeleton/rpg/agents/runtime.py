@@ -19,6 +19,7 @@ from ..bridge import Bridge
 from ..settings import Settings
 from .enemy_agent import EnemyAgent
 from .player_agent import PlayerAgent
+from .save_agent import SaveAgent
 from .shop_agent import ShopAgent
 from .world_agent import WorldAgent
 
@@ -42,15 +43,20 @@ class AgentThread(threading.Thread):
                            enemy_jid=j["enemy"], player_jid=j["player"])
         enemy = EnemyAgent(j["enemy"], p["enemy"], self.bridge)
         shop = ShopAgent(j["shop"], p["shop"], self.bridge, player_jid=j["player"])
+        # Optional 5th role: fall back to the player's credentials when the
+        # .env only defines the four core accounts (Option B setups).
+        sj = j.get("save", j["player"])
+        sp_ = p.get("save", p["player"])
+        saver = SaveAgent(sj, sp_, self.bridge)
         player = PlayerAgent(j["player"], p["player"], self.bridge,
-                             peers=[j["world"], j["enemy"], j["shop"]])
+                             peers=[j["world"], j["enemy"], j["shop"], sj])
         try:
-            for a in (world, enemy, shop, player):
+            for a in (world, enemy, shop, saver, player):
                 # a.start(auto_register=True) also creates the account on
                 # servers that allow in-band registration.
                 a.start(auto_register=True)
             self.agents = {"world": world, "enemy": enemy,
-                           "shop": shop, "player": player}
+                           "shop": shop, "save": saver, "player": player}
             self.loop.run_forever()
         finally:
             for a in self.agents.values():

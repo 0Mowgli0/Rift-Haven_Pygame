@@ -1,3 +1,42 @@
 {
-  "golem_king": {"name": "Golem King", "hp": 120, "attack": 14, "defense": 4, "speed": 25, "gold": 100, "weapon": "rusty_sword", "sprite": "golem.png", "color": [120, 120, 140]}
+  "magma_golem": {
+    "name": "Magma Golem",
+    "hp": 120, "attack": 14, "defense": 4, "speed": 25, "gold": 100,
+    "weapon": "rusty_sword", "sprite": "magma_golem.png", "color": [120, 120, 140],
+    "dialogue": "The mountain stirs. You should not have come.",
+    "phases": [
+      {"at": 0.66, "cooldown_mult": 0.75, "line": "Now the core wakes...", "attacks": ["slam", "burst"]},
+      {"at": 0.33, "cooldown_mult": 0.55, "line": "I AM THE RIFT'S FURNACE!", "attacks": ["burst", "slam"]}
+    ]
+  },
+  "frost_titan": {
+    "name": "Frost Titan",
+    "hp": 150, "attack": 16, "defense": 5, "speed": 22, "gold": 150,
+    "sprite": "frost_titan.png", "color": [150, 200, 230],
+    "dialogue": "Cold keeps the rift quiet. You bring warmth. Unwise.",
+    "phases": [
+      {"at": 0.66, "cooldown_mult": 0.7, "line": "The glacier remembers you.", "attacks": ["slam", "burst"]},
+      {"at": 0.33, "cooldown_mult": 0.5, "line": "WINTER DOES NOT YIELD!", "attacks": ["burst", "slam"]}
+    ]
+  },
+  "moss_ancient": {
+    "name": "Moss Ancient",
+    "hp": 180, "attack": 18, "defense": 6, "speed": 18, "gold": 200,
+    "sprite": "moss_ancient.png", "color": [110, 165, 90],
+    "dialogue": "Roots drink deep of the rift. So shall I, of you.",
+    "phases": [
+      {"at": 0.66, "cooldown_mult": 0.75, "line": "The grove tightens its grip...", "attacks": ["slam", "burst"]},
+      {"at": 0.33, "cooldown_mult": 0.55, "line": "THE FOREST ENDURES ALL!", "attacks": ["burst", "slam"]}
+    ]
+  },
+  "void_warden": {
+    "name": "Void Warden",
+    "hp": 220, "attack": 20, "defense": 7, "speed": 26, "gold": 280,
+    "sprite": "void_warden.png", "color": [90, 60, 145],
+    "dialogue": "You hear the last rift? I am its keeper. I am its teeth.",
+    "phases": [
+      {"at": 0.66, "cooldown_mult": 0.7, "line": "Stars die here. So will you.", "attacks": ["slam", "burst"]},
+      {"at": 0.33, "cooldown_mult": 0.5, "line": "THE VOID HUNGERS!", "attacks": ["burst", "slam"]}
+    ]
+  }
 }

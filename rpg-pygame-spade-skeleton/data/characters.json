@@ -1,0 +1,51 @@
+{
+  "knight": {
+    "name": "Sir Aldric",
+    "title": "Knight",
+    "sprite": "knight.png",
+    "locked": false,
+    "stats": {"hp": 120, "attack": 12, "defense": 4, "speed": 150},
+    "attack_style": "Melee swing with a wide arc",
+    "attack_range": 56,
+    "attack_cooldown": 0.5,
+    "projectile": null,
+    "lore": "A seasoned veteran of the Rift wars. Slow but unbreakable."
+  },
+  "ranger": {
+    "name": "Sylvi",
+    "title": "Ranger",
+    "sprite": "ranger.png",
+    "locked": false,
+    "stats": {"hp": 80, "attack": 7, "defense": 1, "speed": 200},
+    "attack_style": "Fast, long-range arrows",
+    "attack_range": 520,
+    "attack_cooldown": 0.25,
+    "projectile": {"speed": 620, "sprite": "arrow.png"},
+    "lore": "She hunts what crawls out of the rifts, from a distance."
+  },
+  "mage": {
+    "name": "Malrik",
+    "title": "Mage",
+    "sprite": "mage.png",
+    "locked": false,
+    "stats": {"hp": 70, "attack": 10, "defense": 1, "speed": 160},
+    "attack_style": "Plasma balls (chain lightning later)",
+    "attack_range": 460,
+    "attack_cooldown": 0.4,
+    "projectile": {"speed": 420, "sprite": "plasma_ball.png"},
+    "lore": "He studied the Rift until it studied him back."
+  },
+  "rogue": {
+    "name": "Vex",
+    "title": "Rogue",
+    "sprite": "rogue.png",
+    "locked": true,
+    "unlock_hint": "Rescue them after a boss fight.",
+    "stats": {"hp": 90, "attack": 9, "defense": 2, "speed": 230},
+    "attack_style": "Throwing daggers and dash-stabs",
+    "attack_range": 320,
+    "attack_cooldown": 0.2,
+    "projectile": {"speed": 700, "sprite": "dagger.png"},
+    "lore": "The Rift took everything; Vex wants it back."
+  }
+}

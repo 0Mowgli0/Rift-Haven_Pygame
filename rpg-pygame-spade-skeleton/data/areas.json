@@ -1,11 +1,46 @@
 {
   "green_cave": {
     "name": "Magma Cave",
-    "mobs": ["slime", "bat", "lava_imp", "skeleton_grunt"],
+    "mobs": ["fire_slime", "cave_bat", "lava_imp", "skeleton_grunt"],
     "mob_count": 6,
-    "boss": "golem_king",
+    "boss": "magma_golem",
     "map": {"w": 30, "h": 20, "fill": "cave"},
-    "sprite": "cave.png",
-    "color": [60, 90, 60]
+    "background": "boss_arena_magma",
+    "color": [60, 90, 60],
+    "portal_color": [255, 130, 40],
+    "hub_pos": [0.508, 0.47]
+  },
+  "frost_hollow": {
+    "name": "Frost Hollow",
+    "mobs": ["cave_bat", "fire_slime", "skeleton_grunt"],
+    "mob_count": 6,
+    "boss": "frost_titan",
+    "map": {"w": 30, "h": 20, "fill": "cave"},
+    "color": [150, 180, 205],
+    "portal_color": [120, 200, 255],
+    "requires": "magma_golem",
+    "hub_pos": [0.501, 0.151]
+  },
+  "mossy_ruins": {
+    "name": "Mossy Ruins",
+    "mobs": ["skeleton_grunt", "cave_bat", "lava_imp"],
+    "mob_count": 7,
+    "boss": "moss_ancient",
+    "map": {"w": 30, "h": 20, "fill": "cave"},
+    "color": [70, 120, 70],
+    "portal_color": [110, 220, 130],
+    "requires": "frost_titan",
+    "hub_pos": [0.773, 0.335]
+  },
+  "void_rift": {
+    "name": "Void Rift",
+    "mobs": ["lava_imp", "skeleton_grunt", "cave_bat"],
+    "mob_count": 8,
+    "boss": "void_warden",
+    "map": {"w": 30, "h": 20, "fill": "cave"},
+    "color": [55, 45, 75],
+    "portal_color": [140, 90, 255],
+    "requires": "moss_ancient",
+    "hub_pos": [0.156, 0.537]
   }
 }

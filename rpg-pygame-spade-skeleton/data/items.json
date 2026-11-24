@@ -1,0 +1,8 @@
+{
+  "magma_core": {"name": "Magma Core", "kind": "material", "sprite": "magma_core.png", "desc": "A still-beating shard of the golem's heart.", "value": 25},
+  "health_potion": {"name": "Health Potion", "kind": "consumable", "sprite": "health_potion.png", "desc": "Restores 40 HP.", "value": 15},
+  "slime_gel": {"name": "Slime Gel", "kind": "material", "sprite": "", "desc": "Wobbly but flammable.", "value": 5},
+  "bat_wing": {"name": "Bat Wing", "kind": "material", "sprite": "", "desc": "Leathery and twitchy.", "value": 5},
+  "bone_shard": {"name": "Bone Shard", "kind": "material", "sprite": "", "desc": "Grinds into fine dust.", "value": 5},
+  "imp_ember": {"name": "Imp Ember", "kind": "material", "sprite": "", "desc": "Never quite goes out.", "value": 5}
+}

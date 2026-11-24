@@ -9,17 +9,23 @@ from __future__ import annotations
 
 import random
 
-import pygame
-
-from .inventory import Inventory
+from . import fsm as F
+from . import combat as CB
+from . import enemies as EN
+from .fsm import FSM
+from .inventory import Chest, Inventory, ItemStack
 from .models import Boss, Mob, Player, Weapon, make_mob
-from .settings import Settings, load_all_data
-from .world import Scene, area_scene, home_scene
+from .settings import Settings, load_all_data, load_npcs
+from .world import Scene, Interactable, area_scene, home_scene, outside_scene
 
-# Phases mirror the FSM states in rpg/agents/player_agent.py
-MENU, HOME_BASE, TELEPORT, AREA_MOBS, BOSS_FIGHT = "MENU HOME_BASE TELEPORT AREA_MOBS BOSS_FIGHT".split()
-REWARD, UPGRADE, GAME_OVER, END = "REWARD UPGRADE GAME_OVER END".split()
-PHASES = (MENU, HOME_BASE, TELEPORT, AREA_MOBS, BOSS_FIGHT, REWARD, UPGRADE, GAME_OVER, END)
+# Canonical phase names live in rpg/fsm.py (shared with the agent FSM).
+# Legacy aliases keep older call sites working until SPADE phase 9 cleanup.
+MENU = F.START_MENU
+HOME_BASE = F.HOME
+TELEPORT = F.OUTSIDE
+AREA_MOBS, BOSS_FIGHT = F.AREA_MOBS, F.BOSS_FIGHT
+REWARD, UPGRADE, GAME_OVER, END = F.REWARD, F.UPGRADE, F.GAME_OVER, F.END
+PHASES = F.STATES
 
 
 class GameState:
@@ -30,29 +36,137 @@ class GameState:
         self.data = load_all_data()
         self.player = Player(x=200, y=200)
         self.inv = Inventory()
-        self.phase = MENU
+        self._fsm = FSM(F.START_MENU)
+        self.character_id: str | None = None
+        self.unlocked_characters: set[str] = {
+            cid for cid, c in self.data["characters"].items()
+            if not c.get("locked")}
         self.area_id = "home"
         self.mobs: list[Mob] = []
         self.boss: Boss | None = None
+        # Real-time combat state (owned by the pygame loop, see rpg/combat.py)
+        self.projectiles: list[CB.Projectile] = []
+        self.texts: list[CB.FloatingText] = []
+        self.attack_cd: float = 0.0
+        self.shake: float = 0.0
+        self.shake_offset: tuple[float, float] = (0.0, 0.0)
         self.messages: list[str] = []  # transient UI log
-        self.upgrade_menu = False
+        self.trophy_menu = False       # trophy cabinet panel open
+        self.paused_from: str | None = None  # phase to resume after PAUSED
+        # Phase 6: chests + open UI state. The home chest is the storage box.
+        self.chests: dict[str, Chest] = {
+            "home_chest": Chest("home_chest")}
+        self.open_chest: str | None = None   # chest UI currently open, if any
+        self.chest_pane = "chest"            # chest | bag (focus in chest UI)
+        self.inv_slot = 0                    # selected slot (left column)
+        self.chest_slot = 0                  # selected slot (right column)
+        self.hover_tip: tuple[int, int] | None = None  # tooltip grid coords
+        # Phase 7: NPCs + dialogue, data-driven from data/npcs.json.
+        npc_defs, self.dialogue = load_npcs()
+        self.npcs = npc_defs
+        self.open_dialogue: dict | None = None   # current line dict or None
+        self.rescued_npcs: set[str] = set()      # prisoner ids already freed
+        # Phase 8: persistence. active_slot = slot used by autosaves.
+        from . import save as SAVE
+        self._save = SAVE
+        self.active_slot = 1
+        self.save_mode = "save"              # "save" | "load" (slot picker)
         t = settings.tile
+        hub_cols = round(settings.width / t)
+        hub_rows = round(settings.height / t)
+        hub_px = (settings.width, settings.height)
         self.scenes: dict[str, Scene] = {
-            "home": home_scene(40, 22, t),
+            "home": home_scene(hub_cols, hub_rows, t, px=hub_px),
+            "outside": outside_scene(hub_cols, hub_rows, t, px=hub_px),
         }
         for akey, a in self.data["areas"].items():
             self.scenes[akey] = area_scene(
                 akey, a["name"], a["map"]["w"], a["map"]["h"], t,
-                tuple(a.get("color", (60, 90, 60))))
+                tuple(a.get("color", (60, 90, 60))),
+                bg=a.get("background"))
+        # One hub portal per area (data-driven; locked until "requires" boss).
+        # "hub_pos" pins each portal to its painted swirl in outside_hub.png
+        # as (fx, fy) fractions of the screen; unpinned areas spread evenly.
+        outside = self.scenes["outside"]
+        for i, (aid, a) in enumerate(self.data["areas"].items()):
+            fx, fy = a.get("hub_pos", (0.25 + 0.2 * i, 0.5))
+            outside.add(Interactable(
+                f"portal_{aid}", "portal",
+                round(fx * settings.width), round(fy * settings.height),
+                {"area": aid, "portal_color": a.get("portal_color",
+                                                    (150, 90, 240))}))
         # Starting weapon
         first = next(iter(self.data["weapons"]))
         self.inv.add_or_get_weapon(first, self.data["weapons"][first])
         self.inv.equip(first)
 
+    @property
+    def phase(self) -> str:
+        """Current FSM state (canonical names in rpg/fsm.py)."""
+        return self._fsm.state
+
+    @phase.setter
+    def phase(self, new_state: str) -> None:
+        """All phase changes go through the FSM transition table."""
+        self._fsm.transition(new_state, log=self.log)
+
+    def menu_items(self) -> list[str]:
+        """Start menu entries; Continue stays disabled until saves exist."""
+        return ["New Game", "Continue", "Settings", "Quit"]
+
+    def characters(self) -> dict[str, dict]:
+        return self.data["characters"]
+
+    def select_character(self, cid: str) -> None:
+        """Apply a chosen character: id + stats -> Player (pygame thread)."""
+        c = self.data["characters"].get(cid)
+        if not c:
+            self.log(f"Unknown character '{cid}'.")
+            return
+        if cid not in self.unlocked_characters:
+            self.log(f"{c['name']} is locked: {c.get('unlock_hint', '?')}")
+            return
+        self.character_id = cid
+        st = self.player.stats
+        cs = c["stats"]
+        st.max_hp = st.hp = cs["hp"]
+        st.attack, st.defense, st.speed = cs["attack"], cs["defense"], cs["speed"]
+        self.log(f"Playing {c['name']} the {c['title']}: {c['attack_style']}.")
+
     # ------------------------------------------------------------------ menu
     def start_game(self) -> None:
-        self.phase = HOME_BASE
+        self.enter_area("home")   # place the player at the home spawn
+        self.phase = F.HOME
         self.log("Welcome home! E = interact, ESC/q = quit.")
+
+    def sleep(self) -> None:
+        """Bed interaction: full heal + autosave to the active slot."""
+        st = self.player.stats
+        st.hp = st.max_hp
+        ok = self._save.save_slot(self, self.active_slot)
+        self.log("You sleep and wake fully restored."
+                 + (f" (saved to slot {self.active_slot})" if ok
+                    else " (autosave FAILED)"))
+
+    def autosave(self) -> None:
+        """Autosave after a boss (also used by SaveAgent online)."""
+        if self._save.save_slot(self, self.active_slot):
+            self.log(f"Autosaved to slot {self.active_slot}.")
+
+    def eat(self) -> None:
+        """Dinner-table interaction: a small heal with no gold cost."""
+        st = self.player.stats
+        if st.hp >= st.max_hp:
+            self.log("You are already full. The stew keeps simmering.")
+            return
+        st.hp = min(st.max_hp, st.hp + 25)
+        self.log("You grab a warm bowl of stew. (+25 HP)")
+
+    def unlock_character(self, cid: str) -> None:
+        """Rescue flow (later phase): unlock a locked character."""
+        if cid in self.data["characters"]:
+            self.unlocked_characters.add(cid)
+            self.log(f"Character unlocked: {self.data['characters'][cid]['name']}!")
 
     def log(self, text: str) -> None:
         self.messages.append(text)
@@ -83,12 +197,19 @@ class GameState:
             self.boss = Boss.from_data(bid, d, x, y)
             self.phase = BOSS_FIGHT
             self.log(f"BOSS: {d['name']} attacks!")
+            if self.boss.intro:
+                self.log(f"{d['name']}: \"{self.boss.intro}\"")
         elif et == "mob_died":
             for m in self.mobs:
                 if m.id == ev["id"]:
                     m.hp = 0
                     self.inv.add_gold(m.gold)
-                    self.log(f"{m.name} defeated (+{m.gold}g)")
+                    # Materials drop so the inventory/chests have real content.
+                    drop = {"fire_slime": "slime_gel", "cave_bat": "bat_wing",
+                            "skeleton_grunt": "bone_shard",
+                            "lava_imp": "imp_ember"}.get(m.kind, "magma_core")
+                    self.inv.add_item(drop, 1, self.data["items"])
+                    self.log(f"{m.name} defeated (+{m.gold}g, {drop})")
             if not any(m.alive for m in self.mobs):
                 self.mobs = []
                 # WorldAgent (or offline director) decides the next phase.
@@ -105,10 +226,19 @@ class GameState:
                 self.boss = None
             self.phase = REWARD
             self.log("Boss defeated! Reward collected.")
+            self.autosave()
         elif et == "phase":
             self.phase = ev["phase"]
             if ev.get("area"):
                 self.enter_area(ev["area"])
+        elif et == "boss_attack":
+            # Agent side picked the attack; pygame resolves the telegraph.
+            b = self.boss
+            if b and b.alive:
+                b.tel = 0.7
+                b.tel_name = ev["name"]
+                b.tel_radius = 130 if ev["name"] == "slam" else 0.0
+                self.log(f"{b.name} winds up: {ev['name'].upper()}!")
         elif et == "enemy_intent":
             # AI tick from EnemyAgent: move one entity toward the player.
             b = self.boss if ev["id"] == "boss" else next(
@@ -126,41 +256,39 @@ class GameState:
             self.log(f"Upgrade: {'OK' if ev['ok'] else 'not enough gold'} "
                      f"({self.inv.gold}g left)")
         elif et == "save":
-            self.log("Game autosaved. (TODO: persist to disk)")
+            self.autosave()
         elif et == "message":
             self.log(ev.get("text", ""))
 
     # ------------------------------------------------------------ player actions
     def enter_area(self, area_id: str) -> None:
         self.area_id = area_id
-        self.scenes.setdefault(area_id, self.scenes["home"])
         self.mobs, self.boss = [], None
-        px, py = 2.5 * self.s.tile, 2.5 * self.s.tile
-        self.player.x, self.player.y = px, py
+        scene = self.scenes.get(area_id)
+        if scene is None:  # data-driven area without a prebuilt scene
+            a = self.data["areas"][area_id]
+            scene = area_scene(area_id, a["name"], a["map"]["w"],
+                               a["map"]["h"], self.s.tile,
+                               tuple(a.get("color", (60, 90, 60))),
+                               bg=a.get("background"))
+            self.scenes[area_id] = scene
+        sx, sy = scene.spawn or (2.5 * self.s.tile, 2.5 * self.s.tile)
+        self.player.x, self.player.y = sx, sy
 
-    def attack_nearby(self) -> dict | None:
-        """pygame resolves the hit and reports the result to the agents.
+    def fire(self, tx: float, ty: float) -> list[dict]:
+        """Fire the basic attack toward world point (tx, ty); see combat.py."""
+        return CB.try_fire(self, tx, ty)
 
-        Returns the result event (caller pushes it to bridge.to_agents).
+    def tick(self, dt: float) -> list[dict]:
+        """One combat frame inside the pygame loop; returns protocol events.
+
+        Order: projectiles/combat, then per-kind mob behaviors, then boss
+        (phase transitions + telegraph resolution).
         """
-        p = self.player
-        pr = pygame.Rect(p.x - 20, p.y - 20, 40, 40)  # TODO: weapon range
-        weapon = self.inv.equipped_weapon()
-        dmg = (weapon.total_damage(p.stats.attack) if weapon
-               else p.stats.attack) + random.randint(0, 3)
-        if self.boss and self.boss.alive and pr.collidepoint(self.boss.x, self.boss.y):
-            self.boss.hp -= dmg
-            if self.boss.hp <= 0:
-                return {"type": "boss_died", "id": self.boss.id,
-                        "area": self.area_id}
-            return {"type": "boss_hit", "id": self.boss.id, "damage": dmg}
-        for m in self.mobs:
-            if m.alive and pr.collidepoint(m.x, m.y):
-                m.hp -= dmg
-                if m.hp <= 0:
-                    return {"type": "mob_died", "id": m.id, "area": self.area_id}
-                return {"type": "mob_hit", "id": m.id, "damage": dmg}
-        return None
+        events = CB.tick(self, dt)
+        events += EN.tick_mobs(self, dt)
+        events += EN.tick_boss(self, dt)
+        return events
 
     def try_upgrade(self, target: str) -> None:
         """Request an upgrade (agents validate; offline it happens here)."""
@@ -188,3 +316,116 @@ class GameState:
     def all_bosses_down(self) -> bool:
         """End condition: every boss in data/bosses.json is collected."""
         return set(self.inv.collected_bosses) >= set(self.data["bosses"])
+
+    # ------------------------------------------------------------------ phase 6
+    def chest_for(self, it_name: str) -> Chest:
+        """Chest behind an interactable (stable id per scene)."""
+        cid = f"{self.area_id}_{it_name}"
+        if cid not in self.chests:
+            self.chests[cid] = Chest(cid)
+        return self.chests[cid]
+
+    def open_chest_ui(self, it_name: str) -> None:
+        """Open the chest storage UI next to the player inventory."""
+        self.open_chest = f"{self.area_id}_{it_name}"
+        self.inv_slot = 0
+        self.chest_slot = 0
+        chest = self.chests.get(self.open_chest)
+        if chest and not chest.items:
+            # Seed the home chest with a starter stash so the UI is usable.
+            defs = self.data["items"]
+            p, c = defs["health_potion"], defs["magma_core"]
+            chest.items.append(ItemStack("health_potion", p["name"],
+                                         p["kind"], 2, p["sprite"]))
+            chest.items.append(ItemStack("magma_core", c["name"],
+                                         c["kind"], 1, c["sprite"]))
+
+    def close_chest_ui(self) -> None:
+        self.open_chest = None
+
+    def move_inv_to_chest(self) -> None:
+        """Transfer one qty from the selected inventory slot to the chest."""
+        if self.open_chest is None:
+            return
+        from .inventory import transfer
+        transfer(self.inv.items, self.chests[self.open_chest].items,
+                 self.inv_slot, self.data["items"])
+        self.inv_slot = min(self.inv_slot,
+                            max(0, len(self.inv.items) - 1))
+
+    def move_chest_to_inv(self) -> None:
+        """Transfer one qty from the selected chest slot to the inventory."""
+        if self.open_chest is None:
+            return
+        from .inventory import transfer
+        transfer(self.chests[self.open_chest].items, self.inv.items,
+                 self.chest_slot, self.data["items"])
+        self.chest_slot = min(self.chest_slot,
+                              max(0, len(self.chests[self.open_chest].items) - 1))
+
+    def use_potion(self) -> None:
+        """Consume a health potion from the inventory."""
+        if self.inv.count("health_potion") > 0:
+            self.inv.remove_item("health_potion")
+            st = self.player.stats
+            st.hp = min(st.max_hp, st.hp + 40)
+            self.log("Potion quaffed: +40 HP.")
+        else:
+            self.log("No health potions left.")
+
+    def equip_weapon_slot(self, wid: str) -> None:
+        """Equip a weapon from the inventory weapons dict."""
+        if wid in self.inv.weapons:
+            self.inv.equip(wid)
+            self.log(f"Equipped {self.inv.weapons[wid].name}.")
+
+    # ------------------------------------------------------------------ phase 7
+    def nearest_npc(self, radius: float) -> dict | None:
+        """Closest NPC in this scene within `radius` px of the player."""
+        p, tx = self.player, self.s.tile
+        best, bd = None, radius
+        for n in self.npcs:
+            if n.get("scene") != self.area_id:
+                continue
+            nx, ny = n["x"] * tx, n["y"] * tx
+            d = ((nx - p.x) ** 2 + (ny - p.y) ** 2) ** 0.5
+            if d < bd:
+                best, bd = n, d
+        return best
+
+    def talk_to(self, npc: dict) -> None:
+        """Open a dialogue with an NPC at its first line."""
+        first = npc["lines"][0] if npc.get("lines") else ""
+        self.start_dialogue(first)
+
+    def start_dialogue(self, line_id: str) -> None:
+        line = self.dialogue.get(line_id)
+        if line:
+            self.open_dialogue = dict(line, id=line_id)
+            self.log(f"{line['speaker']}: {line['text']}")
+        else:
+            self.open_dialogue = {"speaker": "?", "text": "...", "next": ""}
+
+    def advance_dialogue(self) -> None:
+        """E/Enter in dialogue: follow the chain, then close.
+
+        Rescue is NOT automatic here: freeing a chained character is an
+        explicit E action on the NPC (see main.py / rescuable_npc_here).
+        """
+        d = self.open_dialogue
+        if not d:
+            return
+        nxt = d.get("next", "")
+        self.open_dialogue = None
+        if nxt and nxt in self.dialogue:
+            self.start_dialogue(nxt)
+
+    def rescuable_npc_here(self, radius: float) -> dict | None:
+        """NPC next to the player whose boss is defeated but not rescued."""
+        near = self.nearest_npc(radius)
+        if (near
+                and near.get("id") not in self.rescued_npcs
+                and near.get("rescue_after_boss")
+                and near["rescue_after_boss"] in self.inv.collected_bosses):
+            return near
+        return None
