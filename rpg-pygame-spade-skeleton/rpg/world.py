@@ -46,6 +46,10 @@ class Scene:
             self.grid[0][x] = self.grid[h - 1][x] = 1
         for y in range(h):
             self.grid[y][0] = self.grid[y][w - 1] = 1
+        # Optional painted-path map ('.' = walkable, '#' = solid) laid over
+        # the artwork; when set it replaces the grid for movement checks so
+        # the player stays on the drawn paths (see _HUB_PATH below).
+        self.walk: list[str] | None = None
         self.interactables: list[Interactable] = []
         self.spawn: tuple[float, float] | None = None  # (px, py) entry point
 
@@ -53,10 +57,14 @@ class Scene:
         self.interactables.append(inter)
 
     def solid(self, px: float, py: float) -> bool:
-        """True if the pixel position hits a wall tile."""
+        """True if the pixel position hits a wall (or off the painted path)."""
         tx, ty = int(px // self.tile), int(py // self.tile)
         if not (0 <= tx < self.w and 0 <= ty < self.h):
             return True
+        if self.walk is not None:
+            if ty >= len(self.walk) or tx >= len(self.walk[ty]):
+                return True
+            return self.walk[ty][tx] != "."
         return self.grid[ty][tx] == 1
 
     def move(self, obj, dx: float, dy: float) -> None:
@@ -114,8 +122,8 @@ def home_scene(w: int, h: int, tile: int,
     Interactables are placed proportionally (fractions of the picture) so they
     line up with the objects in the artwork: wardrobe, crates chest, trophy
     cabinet, gem display case, fireplace, bed, dinner table, stove and the
-    front door at the bottom. The upgrade station is an overlay prop (it is
-    not part of the painting). The top wall band is solid.
+    front door at the bottom. The upgrade station lives outside now (see
+    outside_scene). The top wall band is solid.
     """
     s = Scene("home", "Rift Haven Home", w, h, tile, (70, 90, 120),
               bg="home_base", painted=True)
@@ -136,8 +144,6 @@ def home_scene(w: int, h: int, tile: int,
     put("dinner_table", "food", 0.118, 0.73)
     put("stove", "prop", 0.875, 0.755,
         text="A pot of stew simmers on the stove.")
-    s.add(Interactable("upgrade_station", "station",
-                       round(0.645 * pw), round(0.66 * ph)))
     put("front_door", "door", 0.485, 0.955)
     # The painted wall band across the top of home_base.png is solid; the
     # bottom border is opened because the picture's doorway sits at the very
@@ -149,6 +155,40 @@ def home_scene(w: int, h: int, tile: int,
     return s
 
 
+# Walkable-path map for the painted outside hub (matches
+# assets/backgrounds/outside_hub.png). 40 tiles x 22 tiles; '.' = path you can
+# walk, '#' = the house footprint, treeline, hedges and grass (solid). Row 0-1
+# and the outer ring are art/tree bands. The corridors follow the dirt path:
+# top-left entrance, frost-portal spur, central plaza around the lava rift,
+# spur to the mossy ruins, the void-rift approach on the left, the bottom-left
+# passage by the cairn, the door steps below the house and the bottom-right
+# corridor out past the smithy corner.
+_HUB_PATH = [
+    "########################################",
+    "########################################",
+    "########..##############################",
+    "########..##............################",
+    "#########.##............################",
+    "#########.##............################",
+    "########..##............################",
+    "########...........#####################",
+    "########..........######..........######",
+    "########..........######...##.....######",
+    "########............................####",
+    "##...............##.........##......####",
+    "##..............##########...........###",
+    "###...........############.........#####",
+    "###...........############.........#####",
+    "###...........############........######",
+    "###...........##############......######",
+    "###...........############........######",
+    "###....#......############.........#####",
+    "##.....#.....................#........##",
+    "##.....####................######.....##",
+    "########....................############",
+]
+
+
 def outside_scene(w: int, h: int, tile: int,
                   px: tuple[int, int] | None = None) -> Scene:
     """Outside the house, matching assets/backgrounds/outside_hub.png.
@@ -156,7 +196,9 @@ def outside_scene(w: int, h: int, tile: int,
     The hub stays data-driven: one portal interactable per area from
     data/areas.json is added by GameState (see _add_hub_portals), each pinned
     to its picture portal via the area's "hub_pos" fraction. The house door
-    leads back inside; eggs/mushrooms/stone pile are inspectable props.
+    leads back inside; the bottom-right smithy corner holds the upgrade
+    station (with Smith Torvald beside it); eggs/mushrooms/stone pile are
+    inspectable props.
     Spawn is on the path just below the house door.
     """
     s = Scene("outside", "Haven Outside", w, h, tile, (70, 110, 70),
@@ -166,8 +208,10 @@ def outside_scene(w: int, h: int, tile: int,
     def put(name: str, kind: str, fx: float, fy: float, **data) -> None:
         s.add(Interactable(name, kind, round(fx * pw), round(fy * ph), data))
 
+    # Door point sits on the painted doorway (tiles ~18.5-20, rows 17-20);
+    # the player walks up the steps and presses E right at the door.
     s.add(Interactable("house_door", "door",
-                       round(0.59 * pw), round(0.94 * ph)))
+                       round(0.477 * pw), round(0.819 * ph)))
     put("prism_egg", "prop", 0.359, 0.879,
         text="A prismatic egg hums with rift energy. Best leave it be... for now.")
     put("sunstone_egg", "prop", 0.902, 0.552,
@@ -176,11 +220,17 @@ def outside_scene(w: int, h: int, tile: int,
         text="Glowshrooms. Hunters say they sprout where rifts will open.")
     put("stone_cairn", "prop", 0.117, 0.93,
         text="A traveller's cairn. Someone made it home safely once.")
+    # Smithy corner (bottom-right): the upgrade station with Torvald beside it.
+    s.add(Interactable("upgrade_station", "station",
+                       round(0.905 * pw), round(0.85 * ph)))
     # The painted treeline across the top is solid; bottom border opened for
     # the house-door approach at the bottom edge.
     for y in (1, 2):
         s.grid[y] = [1] * w
     s.grid[h - 1] = [0] * w
+    # The player may only walk the dirt path drawn in the picture (see
+    # _HUB_PATH): the house, treeline and hedges are all solid.
+    s.walk = _HUB_PATH
     s.spawn = (round(0.59 * pw), round(0.97 * ph))
     return s
 

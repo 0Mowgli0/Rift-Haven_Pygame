@@ -8,7 +8,7 @@
     "background": "boss_arena_magma",
     "color": [60, 90, 60],
     "portal_color": [255, 130, 40],
-    "hub_pos": [0.508, 0.47]
+    "hub_pos": [0.5125, 0.436]
   },
   "frost_hollow": {
     "name": "Frost Hollow",
@@ -19,7 +19,7 @@
     "color": [150, 180, 205],
     "portal_color": [120, 200, 255],
     "requires": "magma_golem",
-    "hub_pos": [0.501, 0.151]
+    "hub_pos": [0.509, 0.209]
   },
   "mossy_ruins": {
     "name": "Mossy Ruins",
@@ -30,7 +30,7 @@
     "color": [70, 120, 70],
     "portal_color": [110, 220, 130],
     "requires": "frost_titan",
-    "hub_pos": [0.773, 0.335]
+    "hub_pos": [0.815, 0.355]
   },
   "void_rift": {
     "name": "Void Rift",

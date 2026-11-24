@@ -1,0 +1,34 @@
+{
+  "character": "ranger",
+  "stats": {
+    "hp": 80,
+    "max_hp": 80,
+    "attack": 7,
+    "defense": 1,
+    "speed": 200
+  },
+  "position": {
+    "area": "outside",
+    "x": 632.0000000000015,
+    "y": 178.8000000000002
+  },
+  "inventory": {
+    "gold": 50,
+    "equipped": "rusty_sword",
+    "weapons": {
+      "rusty_sword": {
+        "level": 1
+      }
+    },
+    "items": [],
+    "trophies": []
+  },
+  "chest_home": [],
+  "unlocked_characters": [
+    "knight",
+    "mage",
+    "ranger"
+  ],
+  "rescued_npcs": [],
+  "time": "2026-11-25 00:21"
+}

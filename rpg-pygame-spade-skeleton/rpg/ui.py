@@ -51,14 +51,15 @@ def draw_world(surf: pygame.Surface, gs: GameState, am: AssetManager) -> None:
     tile = gs.s.tile
     t_ms = pygame.time.get_ticks()
     # Animated portals first: their glow sits behind everything else.
-    # On painted hub scenes the unlocked portals come from the artwork; only
-    # locked ones get the dim procedural swirl as a lock indicator.
+    # Painted hub scenes show the artwork's own portals; no moving overlay.
+    # Locked rifts are signalled by the "[Locked]" prompt + E message instead.
     for it in gs.scene.interactables:
         if it.kind == "portal":
-            locked = portal_locked(gs, it)
-            color = ((95, 95, 110) if locked
-                     else tuple(it.data.get("portal_color", (150, 90, 240))))
-            if locked or not gs.scene.painted:
+            if not gs.scene.painted:
+                locked = portal_locked(gs, it)
+                color = ((95, 95, 110) if locked
+                         else tuple(it.data.get("portal_color",
+                                                (150, 90, 240))))
                 _draw_portal(surf, it.x + tile / 2, it.y + tile / 2, t_ms,
                              color, 96, locked)
         elif it.kind == "exit":
@@ -116,12 +117,14 @@ def draw_world(surf: pygame.Surface, gs: GameState, am: AssetManager) -> None:
                         FURNITURE_PLACEHOLDER.get(it.kind, (220, 180, 60)))
         surf.blit(img, img.get_rect(midbottom=(it.x + tile / 2,
                                                it.y + tile + 4)))
-    # NPCs (data-driven from data/npcs.json) at their scene tile positions.
+    # NPCs (data-driven from data/npcs.json) at their scene tile positions,
+    # drawn a touch taller than the player, Stardew-style.
+    npc_h = round(gs.s.player_height * 1.6)
     for n in gs.npcs:
         if n.get("scene") != gs.area_id:
             continue
         nx, ny = n["x"] * tile, n["y"] * tile
-        img = am.sprite("npcs", n.get("sprite", ""), gs.s.player_height,
+        img = am.sprite("npcs", n.get("sprite", ""), npc_h,
                         n["name"][0].upper(),
                         tuple(n.get("color", (200, 180, 120))))
         surf.blit(img, img.get_rect(midbottom=(nx + tile / 2, ny + tile)))

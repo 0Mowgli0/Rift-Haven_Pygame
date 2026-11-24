@@ -63,8 +63,11 @@ check("rogue selectable after unlock", gs.character_id == "rogue")
 # ---- phase 2: home interior -------------------------------------------
 home = gs.scenes["home"]
 kinds = sorted(i.kind for i in home.interactables)
-check("home has bed/door/station/chest/trophy",
-      all(k in kinds for k in ("bed", "chest", "station", "trophy", "door")))
+check("home has bed/door/chest/trophy",
+      all(k in kinds for k in ("bed", "chest", "trophy", "door")))
+check("upgrade station now lives outside",
+      any(i.kind == "station" for i in gs.scenes["outside"].interactables)
+      and "station" not in kinds)
 check("home has inspectable props + food",
       "prop" in kinds and "food" in kinds)
 door = next(i for i in home.interactables if i.kind == "door")
@@ -354,6 +357,14 @@ gs.move_inv_to_chest()
 check("bag -> chest transfer works", len(gs.inv.items) > 0)
 gs.close_chest_ui()
 check("chest UI closes", gs.open_chest is None)
+
+# regression: a differently-named chest must register itself on first open
+gs.open_chest_ui("crates")
+gs.move_chest_to_inv()
+check("crates chest opens + transfers (no KeyError)",
+      gs.open_chest == "home_crates")
+gs.close_chest_ui()
+gs.inv.items.clear()          # drop crates-chest loot before the potion test
 
 # potion use
 gs.player.stats.hp = 10

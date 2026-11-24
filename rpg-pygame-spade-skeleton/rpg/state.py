@@ -327,12 +327,14 @@ class GameState:
 
     def open_chest_ui(self, it_name: str) -> None:
         """Open the chest storage UI next to the player inventory."""
-        self.open_chest = f"{self.area_id}_{it_name}"
+        # chest_for registers the chest on first open (fixes KeyError when a
+        # scene gets a second, differently-named chest such as "crates").
+        chest = self.chest_for(it_name)
+        self.open_chest = chest.id
         self.inv_slot = 0
         self.chest_slot = 0
-        chest = self.chests.get(self.open_chest)
-        if chest and not chest.items:
-            # Seed the home chest with a starter stash so the UI is usable.
+        if not chest.items:
+            # Seed a fresh chest with a starter stash so the UI is usable.
             defs = self.data["items"]
             p, c = defs["health_potion"], defs["magma_core"]
             chest.items.append(ItemStack("health_potion", p["name"],

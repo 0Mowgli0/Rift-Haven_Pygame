@@ -30,7 +30,7 @@ from rpg.offline import LocalDirector
 from rpg import fsm as F
 from rpg.settings import Settings, load_settings
 from rpg.state import GameState
-from rpg.world import nearest_interactable
+from rpg.world import nearest_interactable, portal_locked
 
 KEY_UPGRADES = {pygame.K_1: "hp", pygame.K_2: "attack",
                 pygame.K_3: "defense", pygame.K_4: "speed"}
@@ -98,7 +98,9 @@ def main() -> None:
                         gs.phase = F.HOME
                         gs.log("Victory! You return home a hero.")
                     elif gs.phase == F.UPGRADE:
-                        gs.phase = F.HOME          # FSM: UPGRADE -> HOME
+                        # Station sits outside; return where the player was.
+                        gs.phase = (F.OUTSIDE if gs.area_id == "outside"
+                                    else F.HOME)
                     elif gs.phase in GAMEPLAY_PHASES:
                         gs.paused_from = gs.phase
                         gs.phase = F.PAUSED
@@ -265,7 +267,7 @@ def main() -> None:
                 # -- gameplay --------------------------------------------
                 elif k == pygame.K_i and gs.phase in (F.HOME, F.OUTSIDE):
                     gs.phase = F.INVENTORY
-                elif k == pygame.K_u and gs.phase == F.HOME:
+                elif k == pygame.K_u and gs.phase == F.OUTSIDE:
                     gs.phase = F.UPGRADE
                 elif k in KEY_UPGRADES and gs.phase in (F.AREA_MOBS,
                                                         F.BOSS_FIGHT):
@@ -377,6 +379,12 @@ def _handle_interact(gs: GameState, it, director: LocalDirector | None,
         gs.log(it.data.get("text", "Nothing out of the ordinary."))
     elif kind == "food":
         gs.eat()
+    elif kind == "portal" and portal_locked(gs, it):
+        # Sealed rift: explaining beats a silent refusal.
+        req = gs.data["areas"][it.data["area"]].get("requires", "?")
+        boss = gs.data["bosses"].get(req, {}).get("name", req)
+        gs.log(f"This rift is sealed by riftmagic. "
+               f"Defeat the {boss} to open it!")
     else:  # portal / exit: agent-side decision
         intents.append({"type": "interact", "kind": kind, "name": it.name,
                         **it.data})
