@@ -1,0 +1,11 @@
+{
+  "green_cave": {
+    "name": "Magma Cave",
+    "mobs": ["slime", "bat", "lava_imp", "skeleton_grunt"],
+    "mob_count": 6,
+    "boss": "golem_king",
+    "map": {"w": 30, "h": 20, "fill": "cave"},
+    "sprite": "cave.png",
+    "color": [60, 90, 60]
+  }
+}

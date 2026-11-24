@@ -1,0 +1,17 @@
+# Game configuration. Values here override defaults in rpg/settings.py.
+window:
+  width: 1280
+  height: 720
+  fps: 60
+tile: 32
+
+# run without XMPP (local director instead of SPADE agents).
+# Set to false and configure .env for the full multi-agent mode.
+offline: true
+
+xmpp:
+  # Used only when offline is false; credentials live in .env.
+  world_resource: "rpg-world"
+  verify_note: "See README 'Testing the XMPP connection'"
+
+debug: true
