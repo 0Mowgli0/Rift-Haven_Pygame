@@ -304,6 +304,14 @@ def main() -> None:
                             F.PAUSED, F.END, F.UPGRADE, F.INVENTORY) \
                 and gs.open_chest is None and gs.open_dialogue is None:
             gs.scene.move(gs.player, dx * spd, dy * spd)
+            # Idle-life bookkeeping for the player sprite (see ui.draw_world):
+            # reset the idle timer while moving, note last horizontal facing.
+            if dx or dy:
+                gs.idle_t = 0.0
+                if dx:
+                    gs.player_face = 1 if dx > 0 else -1
+            else:
+                gs.idle_t += dt
         # ---- combat: aim with mouse, shoot with LMB (Space also fires) ----
         if gs.phase in (F.AREA_MOBS, F.BOSS_FIGHT):
             mx, my = pygame.mouse.get_pos()

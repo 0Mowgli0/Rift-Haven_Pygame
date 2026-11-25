@@ -91,7 +91,26 @@ def draw_world(surf: pygame.Surface, gs: GameState, am: AssetManager) -> None:
     cid = gs.character_id or "knight"
     img = am.sprite("player", f"{cid}.png", gs.s.player_height, "P",
                     (70, 130, 220))
-    surf.blit(img, img.get_rect(center=(p.x, p.y)))
+    # Player idle-life: breathing bob while standing still, a small step-hop
+    # while moving, a soft ground shadow, and a sideways glance after a few
+    # idle seconds (calm scenes only, Stardew/Undertale flavor).
+    t_s = t_ms / 1000.0
+    if gs.idle_t > 0.1:
+        bob = math.sin(t_s * 2.2) * 1.6
+    else:
+        bob = abs(math.sin(t_s * 10.0)) * 2.5
+    face = gs.player_face
+    if gs.area_id in ("home", "outside") and gs.idle_t > 3.0 \
+            and (gs.idle_t - 3.0) % 7.0 < 1.2:
+        face = -1
+    if face < 0:
+        img = pygame.transform.flip(img, True, False)
+    shadow = pygame.Surface((max(14, round(img.get_width() * 0.55)), 7),
+                            pygame.SRCALPHA)
+    pygame.draw.ellipse(shadow, (0, 0, 0, 70), shadow.get_rect())
+    surf.blit(shadow, shadow.get_rect(
+        midbottom=(p.x, p.y + gs.s.player_height / 2)))
+    surf.blit(img, img.get_rect(center=(p.x, p.y - bob)))
     # Player HP bar above the sprite while combat is active (spec section 4).
     if gs.phase in (F.AREA_MOBS, F.BOSS_FIGHT):
         _hp_bar(surf, p.x - 24, p.y - gs.s.player_height * 0.62,
@@ -117,17 +136,28 @@ def draw_world(surf: pygame.Surface, gs: GameState, am: AssetManager) -> None:
                         FURNITURE_PLACEHOLDER.get(it.kind, (220, 180, 60)))
         surf.blit(img, img.get_rect(midbottom=(it.x + tile / 2,
                                                it.y + tile + 4)))
-    # NPCs (data-driven from data/npcs.json) at their scene tile positions,
-    # drawn a touch taller than the player, Stardew-style.
+    # NPCs (data-driven from data/npcs.json) at their placed tile positions,
+    # drawn a touch taller than the player, Stardew-style. Lifelike layer:
+    # breathing bob, soft ground shadow, facing flips (see tick_npcs).
     npc_h = round(gs.s.player_height * 1.6)
     for n in gs.npcs:
         if n.get("scene") != gs.area_id:
             continue
+        rt = gs.npc_rt.get(n["id"], {})
         nx, ny = n["x"] * tile, n["y"] * tile
         img = am.sprite("npcs", n.get("sprite", ""), npc_h,
                         n["name"][0].upper(),
                         tuple(n.get("color", (200, 180, 120))))
-        surf.blit(img, img.get_rect(midbottom=(nx + tile / 2, ny + tile)))
+        if rt.get("face", 1) < 0:
+            img = pygame.transform.flip(img, True, False)
+        bob = math.sin(t_s * 2.0 + rt.get("hop", 0.0)) * 1.5  # gentle breath
+        shadow = pygame.Surface((max(12, round(img.get_width() * 0.6)), 7),
+                                pygame.SRCALPHA)
+        pygame.draw.ellipse(shadow, (0, 0, 0, 70), shadow.get_rect())
+        surf.blit(shadow, shadow.get_rect(
+            midbottom=(nx + tile / 2, ny + tile - 1)))
+        surf.blit(img, img.get_rect(
+            midbottom=(nx + tile / 2, ny + tile - 2 - bob)))
         # E: Talk prompt when the player is close (decked below near prompt).
         if ((p.x - nx) ** 2 + (p.y - ny) ** 2) ** 0.5 <= tile * 2.5:
             ftalk = pygame.font.SysFont("monospace", 15, bold=True)

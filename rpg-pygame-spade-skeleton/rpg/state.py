@@ -66,6 +66,13 @@ class GameState:
         self.npcs = npc_defs
         self.open_dialogue: dict | None = None   # current line dict or None
         self.rescued_npcs: set[str] = set()      # prisoner ids already freed
+        # Friendly-NPC lifelike layer: per-NPC runtime state (bob phase,
+        # facing, glance timer) keyed by npc id. NPCs stay on their placed
+        # tile; saves (which never touch npc dicts) stay clean.
+        self.npc_rt: dict[str, dict] = {}
+        # Player idle-life state: seconds standing still + last facing.
+        self.idle_t: float = 0.0
+        self.player_face = 1                  # 1 right, -1 left
         # Phase 8: persistence. active_slot = slot used by autosaves.
         from . import save as SAVE
         self._save = SAVE
@@ -288,6 +295,7 @@ class GameState:
         events = CB.tick(self, dt)
         events += EN.tick_mobs(self, dt)
         events += EN.tick_boss(self, dt)
+        self.tick_npcs(dt)
         return events
 
     def try_upgrade(self, target: str) -> None:
@@ -382,6 +390,46 @@ class GameState:
             self.log(f"Equipped {self.inv.weapons[wid].name}.")
 
     # ------------------------------------------------------------------ phase 7
+    def tick_npcs(self, dt: float) -> None:
+        """Friendly-NPC life with everyone staying on their placed tile
+        (no wandering about): they turn to face a player who comes close,
+        and while unattended they occasionally glance sideways and settle
+        back to front. Pure view-side; no protocol. Pauses whenever a
+        chest/dialogue UI is open.
+        """
+        if self.phase not in (F.HOME, F.OUTSIDE):
+            return
+        if self.open_dialogue is not None or self.open_chest is not None:
+            return
+        tile = self.s.tile
+        p = self.player
+        for n in self.npcs:
+            if n.get("scene") != self.area_id:
+                continue
+            rt = self.npc_rt.setdefault(n["id"], {
+                "face": 1,                            # 1 front, -1 glancing
+                "timer": random.uniform(2.0, 5.0),    # idle glance countdown
+                "glance": 0.0,                        # seconds left mid-glance
+                "hop": random.uniform(0.0, 6.0),      # bob animation phase
+            })
+            nx, ny = n["x"] * tile, n["y"] * tile
+            if ((p.x - nx) ** 2 + (p.y - ny) ** 2) ** 0.5 <= tile * 2.5:
+                # Attention: turn to the player and hold while they're near.
+                rt["face"] = 1 if p.x >= nx else -1
+                rt["glance"] = 0.0
+                rt["timer"] = random.uniform(1.0, 3.0)
+                continue
+            if rt["glance"] > 0:
+                rt["glance"] -= dt
+                if rt["glance"] <= 0:
+                    rt["face"] = 1                    # settle back to front
+            else:
+                rt["timer"] -= dt
+                if rt["timer"] <= 0:
+                    rt["face"] = -1 if random.random() < 0.5 else 1
+                    rt["glance"] = random.uniform(0.8, 1.6)
+                    rt["timer"] = random.uniform(2.5, 5.5)
+
     def nearest_npc(self, radius: float) -> dict | None:
         """Closest NPC in this scene within `radius` px of the player."""
         p, tx = self.player, self.s.tile
