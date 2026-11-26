@@ -15,7 +15,16 @@
     {"id": "prisoner", "name": "Chained Rogue", "sprite": "npc_prisoner.png",
      "scene": "green_cave", "x": 4, "y": 5, "color": [120, 120, 130],
      "lines": ["prisoner_found", "prisoner_free"],
-     "rescue_after_boss": "magma_golem", "unlocks": "rogue"}
+     "rescue_after_boss": "magma_golem", "unlocks": "rogue"},
+    {"id": "stonemason", "name": "Rubble the Stonemason", "sprite": "stonemason.png",
+     "scene": "shop_stone", "x": 33.5, "y": 7.0, "color": [130, 130, 140],
+     "lines": ["stone_intro"], "shop": "shop_stone"},
+    {"id": "weapon_keeper", "name": "Steelwright Bram", "sprite": "shopkeeper.png",
+     "scene": "shop_weapon", "x": 29.0, "y": 15.5, "color": [120, 110, 100],
+     "lines": ["weapon_intro"], "shop": "shop_weapon"},
+    {"id": "potion_keeper", "name": "Mistress Fennwick", "sprite": "alchemist.png",
+     "scene": "shop_potion", "x": 13.5, "y": 14.2, "color": [110, 170, 120],
+     "lines": ["potion_intro"], "shop": "shop_potion"}
   ],
   "dialogue": {
     "intro": {
@@ -66,6 +75,21 @@
     "prisoner_free": {
       "speaker": "Vex",
       "text": "Free at last! These daggers and I owe you one. Take care out there.",
+      "next": ""
+    },
+    "stone_intro": {
+      "speaker": "Rubble the Stonemason",
+      "text": "Rifts chew through walls, you know. A good idol or tonic from my forge, and they chew through you a bit less.",
+      "next": ""
+    },
+    "weapon_intro": {
+      "speaker": "Steelwright Bram",
+      "text": "Iron, daggers or a proper axe - gold on the counter and it walks out with you.",
+      "next": ""
+    },
+    "potion_intro": {
+      "speaker": "Mistress Fennwick",
+      "text": "Bottles, tonics and a touch of mischief. Drink responsibly, hero.",
       "next": ""
     }
   }

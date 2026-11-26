@@ -1,0 +1,29 @@
+{
+  "shop_weapon": {
+    "title": "Steelwright's Arms",
+    "greeting": "Steelwright Bram: 'Mind the anvil, pick a blade. Best steel this side of the rift.'",
+    "weapons": [
+      {"id": "iron_sword", "price": 120},
+      {"id": "twin_daggers", "price": 90},
+      {"id": "war_axe", "price": 260}
+    ],
+    "items": []
+  },
+  "shop_potion": {
+    "title": "Fennwick's Brews",
+    "greeting": "Mistress Fennwick: 'Careful with the red ones, dear. They bite back.'",
+    "items": [
+      {"id": "health_potion", "price": 18},
+      {"id": "strength_elixir", "price": 200},
+      {"id": "swift_draught", "price": 160}
+    ]
+  },
+  "shop_stone": {
+    "title": "Rubble's Stoneworks",
+    "greeting": "Rubble the Stonemason: 'Fire's warm, stone's honest. Have a look.'",
+    "items": [
+      {"id": "stone_skin_tonic", "price": 160},
+      {"id": "guardian_idol", "price": 260}
+    ]
+  }
+}

@@ -40,8 +40,11 @@ MENU_ITEMS = ["New Game", "Continue", "Settings", "Quit"]
 SETTINGS_ITEMS = ["Volume", "Fullscreen", "Difficulty", "Back"]
 DIFFICULTIES = ["easy", "normal", "hard"]
 # Phases where the player controls a body in a scene.
-GAMEPLAY_PHASES = (F.HOME, F.OUTSIDE, F.AREA_MOBS, F.BOSS_FIGHT,
+GAMEPLAY_PHASES = (F.HOME, F.OUTSIDE, F.TOWN, F.AREA_MOBS, F.BOSS_FIGHT,
                    F.UPGRADE, F.INVENTORY)
+# Area id -> phase when arriving through a door/gate (everything else is
+# part of the peaceful town group -> TOWN).
+_AREA_PHASE = {"home": F.HOME, "outside": F.OUTSIDE}
 
 
 def main() -> None:
@@ -97,6 +100,8 @@ def main() -> None:
                         gs.enter_area("home")   # FSM: END -> HOME
                         gs.phase = F.HOME
                         gs.log("Victory! You return home a hero.")
+                    elif gs.phase == F.SHOP:
+                        gs.close_shop_ui()
                     elif gs.phase == F.UPGRADE:
                         # Station sits outside; return where the player was.
                         gs.phase = (F.OUTSIDE if gs.area_id == "outside"
@@ -188,6 +193,27 @@ def main() -> None:
                     elif k in (pygame.K_RETURN,):
                         gs.phase = gs.paused_from or F.HOME
 
+                # -- shop trade UI (stock / bag panes) --------------------
+                elif gs.phase == F.SHOP:
+                    if k in (pygame.K_ESCAPE, pygame.K_q):
+                        gs.close_shop_ui()
+                    elif k == pygame.K_TAB:
+                        gs.shop_pane = ("bag" if gs.shop_pane == "stock"
+                                        else "stock")
+                        gs.shop_slot = 0
+                    elif k == pygame.K_UP or k == pygame.K_DOWN:
+                        n = (len(gs.shop_stock()) if gs.shop_pane == "stock"
+                             else len(gs.inv.items))
+                        if n:
+                            gs.shop_slot = (gs.shop_slot
+                                            + (-1 if k == pygame.K_UP
+                                               else 1)) % n
+                    elif k in (pygame.K_e, pygame.K_RETURN):
+                        if gs.shop_pane == "stock":
+                            gs.buy_from_shop()
+                        else:
+                            gs.sell_to_shop()
+
                 # -- chest UI (two-pane transfer) --------------------------
                 elif gs.open_chest is not None:
                     if k == pygame.K_ESCAPE:
@@ -226,7 +252,8 @@ def main() -> None:
                 elif gs.phase == F.INVENTORY:
                     if k in (pygame.K_i, pygame.K_ESCAPE):
                         gs.phase = (F.HOME if gs.area_id == "home"
-                                    else F.OUTSIDE)
+                                    else F.OUTSIDE if gs.area_id == "outside"
+                                    else F.TOWN)
                     elif k in (pygame.K_LEFT, pygame.K_RIGHT, pygame.K_UP,
                                pygame.K_DOWN):
                         cols, n = 4, len(gs.inv.items)
@@ -240,7 +267,7 @@ def main() -> None:
                             else:
                                 gs.inv_slot = min(n - 1, gs.inv_slot + cols)
                     elif k == pygame.K_e:
-                        gs.use_potion()
+                        gs.use_selected_item()
                     elif k == pygame.K_w:
                         ids = list(gs.inv.weapons)
                         if ids:
@@ -265,7 +292,8 @@ def main() -> None:
                                     "collected": gs.inv.collected_bosses})
 
                 # -- gameplay --------------------------------------------
-                elif k == pygame.K_i and gs.phase in (F.HOME, F.OUTSIDE):
+                elif k == pygame.K_i and gs.phase in (F.HOME, F.OUTSIDE,
+                                                      F.TOWN):
                     gs.phase = F.INVENTORY
                 elif k == pygame.K_u and gs.phase == F.OUTSIDE:
                     gs.phase = F.UPGRADE
@@ -273,19 +301,23 @@ def main() -> None:
                                                         F.BOSS_FIGHT):
                     gs.log("Ability slot reserved (1-4 wired later).")  # TODO
                 elif k == pygame.K_e and gs.phase in (F.HOME, F.OUTSIDE,
-                                                      F.AREA_MOBS):
+                                                      F.TOWN, F.AREA_MOBS):
                     if gs.open_chest is not None or gs.open_dialogue is not None:
                         pass  # UI keys handled above
                     else:
                         # NPCs take priority over furniture when both in range.
-                        npc = gs.nearest_npc(gs.s.tile * 2.5)
+                        npc = gs.nearest_npc(gs.s.tile * 3.0)
                         if npc is not None:
-                            if gs.rescuable_npc_here(gs.s.tile * 2.5) is npc:
+                            if gs.rescuable_npc_here(gs.s.tile * 3.0) is npc:
                                 gs.rescued_npcs.add(npc["id"])
                                 gs.unlock_character(npc.get("unlocks", ""))
                                 gs.start_dialogue(
                                     npc["lines"][-1] if npc.get("lines")
                                     else "prisoner_free")
+                            elif npc.get("shop"):
+                                # Shopkeepers go straight to their trade UI
+                                # (greeting lands in the log; E repeats it).
+                                gs.open_shop_ui(npc["shop"])
                             else:
                                 gs.talk_to(npc)
                         else:
@@ -301,7 +333,7 @@ def main() -> None:
         dx = (keys[pygame.K_RIGHT] or keys[pygame.K_d]) - (keys[pygame.K_LEFT] or keys[pygame.K_a])
         dy = (keys[pygame.K_DOWN] or keys[pygame.K_s]) - (keys[pygame.K_UP] or keys[pygame.K_w])
         if gs.phase not in (F.START_MENU, F.SETTINGS, F.CHARACTER_SELECT,
-                            F.PAUSED, F.END, F.UPGRADE, F.INVENTORY) \
+                            F.PAUSED, F.END, F.UPGRADE, F.INVENTORY, F.SHOP) \
                 and gs.open_chest is None and gs.open_dialogue is None:
             gs.scene.move(gs.player, dx * spd, dy * spd)
             # Idle-life bookkeeping for the player sprite (see ui.draw_world):
@@ -312,6 +344,9 @@ def main() -> None:
                     gs.player_face = 1 if dx > 0 else -1
             else:
                 gs.idle_t += dt
+            # Calm scenes only (no idle glance in the middle of a fight).
+            if gs.phase not in (F.HOME, F.OUTSIDE, F.TOWN):
+                gs.idle_t = 0.0
         # ---- combat: aim with mouse, shoot with LMB (Space also fires) ----
         if gs.phase in (F.AREA_MOBS, F.BOSS_FIGHT):
             mx, my = pygame.mouse.get_pos()
@@ -366,7 +401,17 @@ def _handle_interact(gs: GameState, it, director: LocalDirector | None,
     director through intents.
     """
     kind = it.kind
-    if kind == "door":
+    if kind in ("door", "gate"):
+        # Doors with a "to" destination are view-side teleports: town doors
+        # into shops, shop doors back to town, the sign gates, the hub's
+        # path to town (and back).
+        to = it.data.get("to")
+        if to:
+            gs.enter_area(to)
+            gs.phase = _AREA_PHASE.get(to, F.TOWN)
+            gs.log(f"You make your way to the {to.replace('_', ' ')}.")
+            return
+        # Legacy doors without destination: the home <-> outside pair.
         if gs.phase == F.HOME:
             gs.enter_area("outside")
             gs.phase = F.OUTSIDE

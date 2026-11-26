@@ -369,7 +369,8 @@ gs.inv.items.clear()          # drop crates-chest loot before the potion test
 # potion use
 gs.player.stats.hp = 10
 gs.inv.add_item("health_potion", 1, defs)
-gs.use_potion()
+gs.inv_slot = 0
+gs.use_selected_item()
 check("potion heals 40 and is consumed",
       gs.player.stats.hp == 50 and gs.inv.count("health_potion") == 0)
 

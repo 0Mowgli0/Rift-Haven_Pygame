@@ -212,6 +212,10 @@ def outside_scene(w: int, h: int, tile: int,
     # the player walks up the steps and presses E right at the door.
     s.add(Interactable("house_door", "door",
                        round(0.477 * pw), round(0.819 * ph)))
+    # Top-left stone path (tiles ~7-10) leads up out of the hub to the town.
+    s.add(Interactable("town_path", "door",
+                       round(0.225 * pw), round(0.068 * ph),
+                       {"to": "town"}))
     put("prism_egg", "prop", 0.359, 0.879,
         text="A prismatic egg hums with rift energy. Best leave it be... for now.")
     put("sunstone_egg", "prop", 0.902, 0.552,
@@ -243,3 +247,268 @@ def area_scene(key: str, name: str, w: int, h: int, tile: int,
     s.add(Interactable("exit_home", "exit", 2 * tile, 2 * tile,
                        {"area": "home"}))
     return s
+
+
+# ---------------------------------------------------------------------------
+# The town (mainTown.png) and its shops. Same 40x22 design grid as the hub:
+# '.' = walkable, '#' = buildings / fences / furniture painted in the art.
+# Doors and gates are hotspots the player reaches on the walkable side.
+_TOWN_PATH = [
+    "########################################",
+    "##############...........############..#",
+    "##############...........############..#",
+    "################.........###############",
+    "################.........###############",
+    "#...############.........###############",
+    "##########..####.........#####...#######",
+    "##########..####.........#####...#######",
+    "##########..####.........#####...#######",
+    "########....####.......................#",
+    "########.##............................#",
+    "########.##............................#",
+    "####..##.##..###########..#............#",
+    "####..##.##..#........#####..####......#",
+    "####..##.....#........###########......#",
+    "#............#........###########......#",
+    "#............#..####..#####..####......#",
+    "#............#..####..#...#............#",
+    "#...###.....#########.#...#............#",
+    "#...###.....####.......................#",
+    "#######.....####..........###########..#",
+    "########################################",
+]
+
+
+def town_scene(w: int, h: int, tile: int,
+               px: tuple[int, int] | None = None) -> Scene:
+    """The town square, matching assets/backgrounds/mainTown.png.
+
+    Three shop buildings (potion top-left, weapons left, stonemason top
+    right) entered with E at their doors; a stone path up top leads to the
+    realm "Rifts & Beyond" sign, the garden fence gate opens onto "The
+    Magical Gardens", and the road out the bottom returns to the outside hub.
+    The fountain, buildings, trees and fences are solid.
+    """
+    s = Scene("town", "Rift Haven Town", w, h, tile, (110, 100, 90),
+              bg="mainTown", painted=True)
+
+    def put(name: str, kind: str, tx: float, ty: float, **data) -> None:
+        s.add(Interactable(name, kind, round(tx * tile), round(ty * tile),
+                           data))
+
+    put("shop_potion_door", "door", 10.5, 7.5, to="shop_potion",
+        prompt="Enter shop")
+    put("shop_weapon_door", "door", 4.8, 13.5, to="shop_weapon",
+        prompt="Enter shop")
+    put("shop_stone_door", "door", 31.2, 7.5, to="shop_stone",
+        prompt="Enter townhall")
+    put("beyond_sign", "gate", 22.5, 5.0, to="beyond",
+        label="Rifts & Beyond")
+    put("gardens_gate", "gate", 24.3, 17.8, to="gardens",
+        label="The Magical Gardens")
+    put("fountain", "prop", 29.4, 13.3,
+        text="Clear water whispers over old stone. You feel steadier somehow.")
+    put("to_outside", "door", 8.5, 21.0, to="outside")
+    s.walk = _TOWN_PATH
+    # Arrive in front of the townhall instead of at the far edge of town.
+    s.spawn = (round(31.2 * tile), round(9.4 * tile))
+    return s
+
+
+def store_scene(key: str, name: str, bg: str, color: tuple[int, int, int],
+                walk: list[str], w: int, h: int, tile: int,
+                door_tx: float, door_ty: float, spawn: tuple[float, float],
+                props: list[dict] | None = None, px: tuple[int, int] | None = None
+                ) -> Scene:
+    """A painted shop interior: walls/counters solid, one door back to town.
+
+    `walk` is a 40x22 '.'/'#' map laid over the artwork; the door hotspot
+    plus any flavor props come from store-specific callers.
+    """
+    s = Scene(key, name, w, h, tile, color, bg=bg, painted=True)
+    s.add(Interactable("shop_door", "door",
+                       round(door_tx * tile), round(door_ty * tile),
+                       {"to": "town", "prompt": "Return to town"}))
+    for p in props or []:
+        s.add(Interactable(p["name"], "prop",
+                           round(p["x"] * tile), round(p["y"] * tile),
+                           {"text": p.get("text", "...")}))
+    s.walk = walk
+    s.spawn = (round(spawn[0] * tile), round(spawn[1] * tile))
+    return s
+
+
+def _weapon_store_props() -> list[dict]:
+    return [
+        {"name": "pegboard", "x": 19.0, "y": 7.0,
+         "text": "Swords, axes and spears hang in neat rows. Pick a favorite."},
+        {"name": "hide_wall", "x": 8.0, "y": 5.0,
+         "text": "Beast hides from the rift hunters - good armor material."},
+        {"name": "anvil_corner", "x": 33.5, "y": 9.5,
+         "text": "Bram's smithing anvil. The steel rings true here."},
+    ]
+
+
+def _stone_store_props() -> list[dict]:
+    return [
+        {"name": "statue_alcoves", "x": 9.0, "y": 3.5,
+         "text": "Guardian statues in waiting - they seem almost alive."},
+        {"name": "kiln", "x": 34.5, "y": 5.0,
+         "text": "The kiln roars. Heat rolls over your face."},
+        {"name": "plans", "x": 8.0, "y": 10.6,
+         "text": "Stoneworks sketches: a bridge, a vault, and rift-sealing runes."},
+    ]
+
+
+def _potion_store_props() -> list[dict]:
+    return [
+        {"name": "shelf_wall", "x": 8.0, "y": 6.0,
+         "text": "Potions in every color line the shelves. Some are humming."},
+        {"name": "ledger_book", "x": 12.8, "y": 12.2,
+         "text": "An open ledger of recipes - half of it written in runes."},
+        {"name": "ring_plants", "x": 25.0, "y": 5.5,
+         "text": "Hanging herbs dry above the shelves."},
+    ]
+
+
+# Walk maps for the three painted stores (40x22, '.' = floor, '#' = solid).
+# Weapon store: wall band + hanging gear rows 0-8, shelf table 0-13 / rack
+# 4-13 on the left, counter L with the (sealed) keeper booth on the right,
+# open floor behind the armor rack, door notch bottom-center.
+_WEAPON_STORE_PATH = [
+    "#"*40, "#"*40, "#"*40, "#"*40, "#"*40, "#"*40, "#"*40, "#"*40, "#"*40,
+    "#"*14 + "."*12 + "#"*14,
+    "#"*14 + "."*12 + "#"*14,
+    "#"*14 + "."*12 + "#"*14,
+    "#"*14 + "."*12 + "#"*14,
+    "#"*5 + "."*21 + "#"*14,
+    "#" + "."*8 + "#"*5 + "."*12 + "#"*14,   # rack cols 9-13, door front open
+    "#" + "."*8 + "#"*5 + "."*12 + "#"*14,
+    "#" + "."*8 + "#"*5 + "."*12 + "#"*14,
+    "#" + "."*8 + "#"*5 + "."*12 + "#"*14,
+    "#" + "."*37 + "##",
+    "#" + "."*38 + "#",
+    "#"*19 + "..." + "#"*18,
+    "#"*19 + "..." + "#"*18,
+]
+
+
+def weapon_store_scene(w: int, h: int, tile: int) -> Scene:
+    """Steelwright's Arms: the weapon shop (assets/backgrounds/wepon_store).
+    Bram stands at the counter, reachable from the floor below it."""
+    return store_scene(
+        "shop_weapon", "Steelwright's Arms", "wepon_store", (120, 90, 70),
+        _WEAPON_STORE_PATH, w, h, tile,
+        door_tx=20.0, door_ty=20.6, spawn=(20.0, 19.2),
+        props=_weapon_store_props())
+
+
+# Stonemason store: statue alcoves + kiln band rows 0-6, stone stacks left,
+# crates mid-top, workbench + log center-bottom, rubble edges, door notch
+# bottom-center; the stonemason holds the open floor by the kiln.
+_STONE_STORE_PATH = [
+    "#"*40, "#"*40, "#"*40, "#"*40, "#"*40, "#"*40, "#"*40,
+    "#####" + "."*6 + "#"*8 + "."*20 + "#",
+    "#####" + "."*6 + "#"*8 + "."*20 + "#",
+    "#####" + "."*34 + "#",
+    "#####" + "."*34 + "#",
+    "#####" + "."*34 + "#",
+    "####" + "."*7 + "####" + "."*24 + "#",
+    "####" + "."*7 + "####" + "."*24 + "#",
+    "#"*10 + "."*9 + "#"*11 + "."*9 + "#",
+    "#"*10 + "."*9 + "#"*11 + "."*9 + "#",
+    "#"*10 + "."*9 + "#"*11 + "."*9 + "#",
+    "#"*10 + "."*29 + "#",
+    "#"*10 + "."*29 + "#",
+    "#"*16 + "."*6 + "#"*18,
+    "#"*16 + "."*6 + "#"*18,
+    "#"*16 + "."*6 + "#"*18,
+]
+
+
+def stone_store_scene(w: int, h: int, tile: int) -> Scene:
+    """Rubble's Stoneworks: the stonemason's hall (stonemaisen_store.png)."""
+    return store_scene(
+        "shop_stone", "Rubble's Stoneworks", "stonemaisen_store",
+        (105, 105, 110), _STONE_STORE_PATH, w, h, tile,
+        door_tx=18.5, door_ty=20.6, spawn=(18.5, 19.2),
+        props=_stone_store_props())
+
+
+# Potion store: shelf wall rows 0-11 (with a closed gap mid-top), the big
+# shop table 8-21 rows 12-16, corner rack left, glowing bottles bottom-right,
+# door notch bottom-center at cols 15-19.
+_POTION_STORE_PATH = [
+    "#"*40, "#"*40, "#"*40, "#"*40, "#"*40, "#"*40, "#"*40,
+    "#"*20 + "."*6 + "#"*14,
+    "#"*20 + "."*6 + "#"*14,
+    "#"*20 + "."*6 + "#"*14,
+    "#"*20 + "."*6 + "#"*14,
+    "#"*20 + "."*6 + "#"*14,
+    "..." + "###" + ".." + "#"*14 + "."*17 + "#",
+    "..." + "###" + ".." + "#"*14 + "."*17 + "#",
+    "..." + "###" + ".." + "#"*14 + "."*17 + "#",
+    "........" + "#"*14 + "."*17 + "#",
+    "........" + "#"*14 + "."*17 + "#",
+    "#" + "."*29 + "#"*8 + "." + "#",
+    "#" + "."*29 + "#"*8 + "." + "#",
+    "#"*15 + "."*5 + "#"*20,
+    "#"*15 + "."*5 + "#"*20,
+    "#"*15 + "."*5 + "#"*20,
+]
+
+
+def potion_store_scene(w: int, h: int, tile: int) -> Scene:
+    """Fennwick's Brews: the potion shop (potion_room.png)."""
+    return store_scene(
+        "shop_potion", "Fennwick's Brews", "potion_room", (90, 120, 100),
+        _POTION_STORE_PATH, w, h, tile,
+        door_tx=17.5, door_ty=20.6, spawn=(17.5, 19.2),
+        props=_potion_store_props())
+
+
+def beyond_scene(w: int, h: int, tile: int) -> Scene:
+    """Rifts & Beyond: the path past the town sign (art pending: colored grid).
+
+    A scarred field of fallen rift stones; prop stones are inspectable and
+    a gate at the bottom leads back to town.
+    """
+    s = Scene("beyond", "Rifts & Beyond", w, h, tile, (70, 55, 95))
+    s.add(Interactable("gate_back", "gate",
+                       round((w // 2) * tile), round((h - 2) * tile),
+                       {"to": "town", "label": "Town"}))
+    for nm, tx, ty, txt in (
+            ("fallen_menhirs", 8.5, 5.5,
+             "Menhirs sheared clean in half. Whatever opened this rift left fast."),
+            ("rift_scars", 20.0, 8.0,
+             "Hairline scars of light crawl across the ground here."),
+            ("watching_stone", 30.5, 12.5,
+             "A carved eye watches the horizon. It blinks when you look away.")):
+        s.add(Interactable(nm, "prop", round(tx * tile), round(ty * tile),
+                           {"text": txt}))
+    s.spawn = (round((w // 2) * tile), round((h - 3) * tile))
+    return s
+
+
+def gardens_scene(w: int, h: int, tile: int) -> Scene:
+    """The Magical Gardens: bloom-lined paths (art pending: colored grid).
+
+    A bench and a small pond are inspects; the gate at the bottom leads back
+    to town.
+    """
+    s = Scene("gardens", "The Magical Gardens", w, h, tile, (70, 130, 80))
+    s.add(Interactable("gate_back", "gate",
+                       round((w // 2) * tile), round((h - 2) * tile),
+                       {"to": "town", "label": "Town"}))
+    for nm, tx, ty, txt in (
+            ("pond", 17.5, 8.0,
+             "Pond lilies glow faintly. The water reflects stars that aren't there."),
+            ("moon_bench", 26.0, 12.0,
+             "A bench of living wood, grown into a perfect seat."),
+            ("singing_flowers", 10.5, 14.0,
+             "These flowers hum the tune the town bell used to play.")):
+        s.add(Interactable(nm, "prop", round(tx * tile), round(ty * tile),
+                           {"text": txt}))
+    s.spawn = (round((w // 2) * tile), round((h - 3) * tile))
+    return s
+

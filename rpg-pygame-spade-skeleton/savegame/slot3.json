@@ -1,0 +1,37 @@
+{
+  "character": null,
+  "stats": {
+    "hp": 115,
+    "max_hp": 115,
+    "attack": 10,
+    "defense": 4,
+    "speed": 160
+  },
+  "position": {
+    "area": "town",
+    "x": 200,
+    "y": 200
+  },
+  "inventory": {
+    "gold": 368,
+    "equipped": "iron_sword",
+    "weapons": {
+      "rusty_sword": {
+        "level": 1
+      },
+      "iron_sword": {
+        "level": 1
+      }
+    },
+    "items": [],
+    "trophies": []
+  },
+  "chest_home": [],
+  "unlocked_characters": [
+    "knight",
+    "mage",
+    "ranger"
+  ],
+  "rescued_npcs": [],
+  "time": "2026-11-25 15:05"
+}

@@ -106,7 +106,7 @@ def load_all_data() -> dict[str, dict]:
     """Load every data file once; new content only requires new JSON entries."""
     return {n: load_data(n) for n in
             ("enemies", "bosses", "weapons", "areas", "characters", "items",
-             "npcs")}
+             "npcs", "shops")}
 
 
 def load_npcs() -> tuple[list[dict], dict]:

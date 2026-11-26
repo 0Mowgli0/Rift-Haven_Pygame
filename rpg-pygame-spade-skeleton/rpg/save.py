@@ -102,5 +102,9 @@ def load_slot(gs, slot: int) -> bool:
     gs.enter_area(pos.get("area", "home"))
     gs.player.x = float(pos.get("x", gs.player.x))
     gs.player.y = float(pos.get("y", gs.player.y))
-    gs.phase = F.HOME
+    # Resume in the phase matching where the save was made (town-group
+    # areas/stores all come back as TOWN; shops always close on load).
+    area = gs.area_id
+    gs.phase = (F.HOME if area == "home"
+                else F.OUTSIDE if area == "outside" else F.TOWN)
     return True

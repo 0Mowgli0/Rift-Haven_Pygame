@@ -22,6 +22,7 @@ KIND_SPRITES = {
     "chest": ("items", "chest_closed.png", 48, "Open"),
     "portal": ("items", "portal.png", 96, "Travel"),  # fallback when art arrives
     "exit": ("items", "portal.png", 48, "Haven"),
+    "gate": ("items", "prop.png", 0, "Travel"),  # signposts/doors, art-drawn
     "prop": ("items", "prop.png", 0, "Inspect"),
     "food": ("items", "prop.png", 0, "Eat"),
 }
@@ -100,7 +101,7 @@ def draw_world(surf: pygame.Surface, gs: GameState, am: AssetManager) -> None:
     else:
         bob = abs(math.sin(t_s * 10.0)) * 2.5
     face = gs.player_face
-    if gs.area_id in ("home", "outside") and gs.idle_t > 3.0 \
+    if gs.phase in (F.HOME, F.OUTSIDE, F.TOWN) and gs.idle_t > 3.0 \
             and (gs.idle_t - 3.0) % 7.0 < 1.2:
         face = -1
     if face < 0:
@@ -128,10 +129,12 @@ def draw_world(surf: pygame.Surface, gs: GameState, am: AssetManager) -> None:
     for it in gs.scene.interactables:
         if it.kind in ("portal", "exit"):
             continue
-        if gs.scene.painted and it.kind in PAINTED_KINDS:
-            continue
         folder, fname, height, _ = KIND_SPRITES.get(
             it.kind, ("items", f"{it.kind}.png", 48, "Inspect"))
+        if height <= 0:      # art-drawn kinds (prop/food/gate): no sprite
+            continue
+        if gs.scene.painted and it.kind in PAINTED_KINDS:
+            continue
         img = am.sprite(folder, fname, height, it.name[0].upper(),
                         FURNITURE_PLACEHOLDER.get(it.kind, (220, 180, 60)))
         surf.blit(img, img.get_rect(midbottom=(it.x + tile / 2,
@@ -159,9 +162,10 @@ def draw_world(surf: pygame.Surface, gs: GameState, am: AssetManager) -> None:
         surf.blit(img, img.get_rect(
             midbottom=(nx + tile / 2, ny + tile - 2 - bob)))
         # E: Talk prompt when the player is close (decked below near prompt).
-        if ((p.x - nx) ** 2 + (p.y - ny) ** 2) ** 0.5 <= tile * 2.5:
+        if ((p.x - nx) ** 2 + (p.y - ny) ** 2) ** 0.5 <= tile * 3.0:
             ftalk = pygame.font.SysFont("monospace", 15, bold=True)
-            txt = ftalk.render("[E] Talk" if not npc_rescuable(gs, n)
+            verb = "[E] Shop" if n.get("shop") else "[E] Talk"
+            txt = ftalk.render(verb if not npc_rescuable(gs, n)
                                else "[E] Free them!", True, (140, 255, 160))
             surf.blit(txt, (nx + tile / 2 - txt.get_width() / 2, ny - 22))
     # "Press E" prompt near the interactable the player is standing at.
@@ -169,6 +173,7 @@ def draw_world(surf: pygame.Surface, gs: GameState, am: AssetManager) -> None:
     if near is not None:
         _, _, _, verb = KIND_SPRITES.get(near.kind,
                                          ("items", "", 0, near.name.title()))
+        verb = near.data.get("prompt", verb)
         f = pygame.font.SysFont("monospace", 15, bold=True)
         if near.kind == "portal" and portal_locked(gs, near):
             req = gs.data["areas"][near.data["area"]].get("requires", "?")
@@ -411,6 +416,8 @@ def draw_overlays(surf: pygame.Surface, gs: GameState,
                       "Q: quit without saving"])
     elif gs.phase == F.INVENTORY:
         _draw_inventory_ui(surf, gs, am or AssetManager(gs.s.tile))
+    elif gs.phase == F.SHOP:
+        _draw_shop_ui(surf, gs)
     elif gs.phase == F.UPGRADE:
         wep = gs.inv.equipped_weapon()
         _panel(surf, [
@@ -500,7 +507,7 @@ def _draw_inventory_ui(surf: pygame.Surface, gs: GameState,
     if r is not None and gs.inv_slot < len(gs.inv.items):
         _tooltip(surf, gs, r, gs.inv.items[gs.inv_slot])
     hint = pygame.font.SysFont("monospace", 14).render(
-        "Arrows: select   E: use potion   W: equip next weapon   I/Esc: close",
+        "Arrows: select   E: use item   W: equip next weapon   I/Esc: close",
         True, (150, 150, 150))
     surf.blit(hint, (w // 2 - hint.get_width() // 2, h - 44))
 
@@ -528,6 +535,108 @@ def _draw_chest_ui(surf: pygame.Surface, gs: GameState,
         _tooltip(surf, gs, rc, chest.items[gs.chest_slot])
     elif not active and ri is not None and gs.inv_slot < len(gs.inv.items):
         _tooltip(surf, gs, ri, gs.inv.items[gs.inv_slot])
+
+
+def _draw_shop_ui(surf: pygame.Surface, gs: GameState) -> None:
+    """Shop trade overlay: stock list left, your bag right, gold on top.
+
+    Layout is list-style (Stardew flavor) instead of slot grids: each row is
+    "name ... price" with the selected row highlighted; TAB switches panes,
+    arrows move, E buys/sells, Esc leaves.
+    """
+    w, h = surf.get_size()
+    _dim(surf)
+    shop = gs.shop_def()
+    f = pygame.font.SysFont("monospace", 24, bold=True)
+    title = shop.get("title", "SHOP")
+    surf.blit(f.render(title, True, (255, 215, 0)),
+              (w // 4 - f.size(title)[0] // 2, 50))
+    bt = "YOUR BAG (sell)"
+    surf.blit(f.render(bt, True, (255, 215, 0)),
+              (3 * w // 4 - f.size(bt)[0] // 2, 50))
+    gold = f"Gold: {gs.inv.gold}g"
+    fg = pygame.font.SysFont("monospace", 18, bold=True)
+    surf.blit(fg.render(gold, True, (255, 220, 120)),
+              (w - fg.size(gold)[0] - 20, 20))
+    _shop_rows(surf, gs, pane_left=True)
+    _shop_rows(surf, gs, pane_left=False)
+    f2 = pygame.font.SysFont("monospace", 15)
+    hint = ("Tab: switch pane   Up/Down: select   E: buy   Esc: leave"
+            if gs.shop_pane == "stock"
+            else "Tab: switch pane   Up/Down: select   E: sell   Esc: leave")
+    # Description footer for the selected row.
+    sel_row = (gs.shop_stock()[gs.shop_slot]
+               if gs.shop_pane == "stock" and gs.shop_stock()
+               and gs.shop_slot < len(gs.shop_stock()) else None)
+    bag = gs.inv.items
+    if gs.shop_pane == "bag" and bag and 0 <= gs.shop_slot < len(bag):
+        d = gs.data["items"].get(bag[gs.shop_slot].item_id, {})
+        val = d.get("value", 0)
+        foot = (f"{bag[gs.shop_slot].name}  -  sells for "
+                f"{max(1, round(val * 0.4))}g" if val and
+                d.get("kind") != "trophy" else
+                f"{bag[gs.shop_slot].name}")
+    elif sel_row is not None:
+        d = gs.data["items"].get(sel_row["id"], {}) \
+            if sel_row["kind"] == "item" \
+            else gs.data["weapons"].get(sel_row["id"], {})
+        dmg = f"  damage {d['damage']}" if sel_row["kind"] == "weapon" \
+            and "damage" in d else ""
+        desc = d.get("desc", "")
+        foot = f"{sel_row['name']}{dmg}  ({sel_row['kind']}: " \
+               f"{'weapon' if sel_row['kind'] == 'weapon' else d.get('kind', 'item')})"
+        if desc:
+            foot += f"  -  {desc}"
+    else:
+        foot = "Nothing here."
+    surf.blit(f2.render(foot, True, (200, 200, 200)), (40, h - 96))
+    surf.blit(f2.render(hint, True, (150, 150, 150)),
+              (w // 2 - f2.size(hint)[0] // 2, h - 48))
+
+
+def _shop_rows(surf: pygame.Surface, gs: GameState, pane_left: bool
+               ) -> list[tuple[int, int]]:
+    """Draw one shop pane (rows of name/price); returns (top, bottom) per row."""
+    f = pygame.font.SysFont("monospace", 16)
+    x = w4 = (surf.get_width() // 4 - 180) if pane_left \
+        else (3 * surf.get_width() // 4 - 180)
+    y0 = 100
+    active = (gs.shop_pane == "stock") == pane_left
+    if pane_left:
+        rows = gs.shop_stock()
+        lines = [(f"{r['name']}  -  {r['price']}g", r) for r in rows]
+    else:
+        items = gs.inv.items
+        lines = []
+        for st in items:
+            d = gs.data["items"].get(st.item_id, {})
+            val = d.get("value", 0)
+            sell = max(1, round(val * 0.4)) if val and d.get("kind") != "trophy" \
+                else None
+            qty = f" x{st.qty}" if st.qty > 1 else ""
+            lines.append((f"{st.name}{qty}" + (f"  -  {sell}g" if sell
+                                               else "  (not sellable)"), st))
+    out = []
+    if not lines:
+        txt = f.render("(empty)", True, (120, 120, 130))
+        surf.blit(txt, (x, y0))
+        return []
+    sel = gs.shop_slot if active else -1
+    for i, (text, _) in enumerate(lines):
+        y = y0 + i * 24
+        if y > surf.get_height() - 140:
+            break
+        if active and i == sel:
+            pygame.draw.rect(surf, (60, 50, 20), (x - 8, y - 3,
+                                                  surf.get_width() // 2 - 40,
+                                                  24), border_radius=4)
+            pygame.draw.rect(surf, (255, 215, 0), (x - 8, y - 3,
+                                                   surf.get_width() // 2 - 40,
+                                                   24), 1, border_radius=4)
+        img = f.render(text, True, (235, 235, 225))
+        surf.blit(img, (x, y))
+        out.append((x - 8, y - 3))
+    return out
 
 
 def _draw_dialogue_box(surf: pygame.Surface, gs: GameState) -> None:

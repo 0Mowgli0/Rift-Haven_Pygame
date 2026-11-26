@@ -1,8 +1,12 @@
 {
   "magma_core": {"name": "Magma Core", "kind": "material", "sprite": "magma_core.png", "desc": "A still-beating shard of the golem's heart.", "value": 25},
-  "health_potion": {"name": "Health Potion", "kind": "consumable", "sprite": "health_potion.png", "desc": "Restores 40 HP.", "value": 15},
+  "health_potion": {"name": "Health Potion", "kind": "consumable", "sprite": "health_potion.png", "desc": "Restores 40 HP.", "value": 15, "effect": {"stat": "hp", "amount": 40}},
   "slime_gel": {"name": "Slime Gel", "kind": "material", "sprite": "", "desc": "Wobbly but flammable.", "value": 5},
   "bat_wing": {"name": "Bat Wing", "kind": "material", "sprite": "", "desc": "Leathery and twitchy.", "value": 5},
   "bone_shard": {"name": "Bone Shard", "kind": "material", "sprite": "", "desc": "Grinds into fine dust.", "value": 5},
-  "imp_ember": {"name": "Imp Ember", "kind": "material", "sprite": "", "desc": "Never quite goes out.", "value": 5}
+  "imp_ember": {"name": "Imp Ember", "kind": "material", "sprite": "", "desc": "Never quite goes out.", "value": 5},
+  "strength_elixir": {"name": "Strength Elixir", "kind": "consumable", "sprite": "", "desc": "Permanently sharpens the arm: +2 Attack.", "value": 80, "effect": {"stat": "attack", "amount": 2}},
+  "stone_skin_tonic": {"name": "Stone-Skin Tonic", "kind": "consumable", "sprite": "", "desc": "Skin turn quarry-hard for good: +2 Defense.", "value": 70, "effect": {"stat": "defense", "amount": 2}},
+  "swift_draught": {"name": "Swift Draught", "kind": "consumable", "sprite": "", "desc": "Boots get a spring in their step, forever: +10 Speed.", "value": 70, "effect": {"stat": "speed", "amount": 10}},
+  "guardian_idol": {"name": "Guardian Idol", "kind": "consumable", "sprite": "", "desc": "A warm stone idol that bonds to you: +15 Max HP.", "value": 110, "effect": {"stat": "max_hp", "amount": 15}}
 }

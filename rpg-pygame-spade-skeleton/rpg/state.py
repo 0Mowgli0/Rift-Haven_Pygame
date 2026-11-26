@@ -16,7 +16,9 @@ from .fsm import FSM
 from .inventory import Chest, Inventory, ItemStack
 from .models import Boss, Mob, Player, Weapon, make_mob
 from .settings import Settings, load_all_data, load_npcs
-from .world import Scene, Interactable, area_scene, home_scene, outside_scene
+from .world import (Scene, Interactable, area_scene, home_scene, outside_scene,
+                    town_scene, weapon_store_scene, stone_store_scene,
+                    potion_store_scene, beyond_scene, gardens_scene)
 
 # Canonical phase names live in rpg/fsm.py (shared with the agent FSM).
 # Legacy aliases keep older call sites working until SPADE phase 9 cleanup.
@@ -61,6 +63,10 @@ class GameState:
         self.inv_slot = 0                    # selected slot (left column)
         self.chest_slot = 0                  # selected slot (right column)
         self.hover_tip: tuple[int, int] | None = None  # tooltip grid coords
+        # The town expansion: shops (trade overlay) + their two-pane UI state.
+        self.open_shop: str | None = None    # shop id currently open, if any
+        self.shop_slot = 0                   # selected stock/bag row
+        self.shop_pane = "stock"             # stock | bag (focus in shop UI)
         # Phase 7: NPCs + dialogue, data-driven from data/npcs.json.
         npc_defs, self.dialogue = load_npcs()
         self.npcs = npc_defs
@@ -85,6 +91,12 @@ class GameState:
         self.scenes: dict[str, Scene] = {
             "home": home_scene(hub_cols, hub_rows, t, px=hub_px),
             "outside": outside_scene(hub_cols, hub_rows, t, px=hub_px),
+            "town": town_scene(hub_cols, hub_rows, t, px=hub_px),
+            "shop_weapon": weapon_store_scene(hub_cols, hub_rows, t),
+            "shop_stone": stone_store_scene(hub_cols, hub_rows, t),
+            "shop_potion": potion_store_scene(hub_cols, hub_rows, t),
+            "beyond": beyond_scene(hub_cols, hub_rows, t),
+            "gardens": gardens_scene(hub_cols, hub_rows, t),
         }
         for akey, a in self.data["areas"].items():
             self.scenes[akey] = area_scene(
@@ -373,15 +385,120 @@ class GameState:
         self.chest_slot = min(self.chest_slot,
                               max(0, len(self.chests[self.open_chest].items) - 1))
 
-    def use_potion(self) -> None:
-        """Consume a health potion from the inventory."""
-        if self.inv.count("health_potion") > 0:
-            self.inv.remove_item("health_potion")
-            st = self.player.stats
-            st.hp = min(st.max_hp, st.hp + 40)
-            self.log("Potion quaffed: +40 HP.")
+    def use_selected_item(self) -> None:
+        """Use the selected inventory item (health potion, tonics, idols...).
+
+        Items declare their effect in data/items.json as
+        {"stat": <stats field>, "amount": n}; effects on hp/max_hp clamp
+        sensibly, other stats are added directly onto the player's Stats.
+        """
+        if not (0 <= self.inv_slot < len(self.inv.items)):
+            self.log("Nothing selected to use.")
+            return
+        st = self.inv.items[self.inv_slot]
+        d = self.data["items"].get(st.item_id, {})
+        if d.get("kind") != "consumable":
+            self.log(f"You can't use the {st.name} right now.")
+            return
+        eff = d.get("effect", {})
+        stat, amt = eff.get("stat", "hp"), int(eff.get("amount", 0))
+        ps = self.player.stats
+        if stat == "hp":
+            if ps.hp >= ps.max_hp:
+                self.log("You are already at full health.")
+                return
+            ps.hp = min(ps.max_hp, ps.hp + amt)
+            self.log(f"{st.name} quaffed: +{amt} HP.")
+        elif stat == "max_hp":
+            ps.max_hp += amt
+            ps.hp += amt
+            self.log(f"{st.name} shatters warmly: +{amt} max HP!")
+        elif hasattr(ps, stat):
+            setattr(ps, stat, getattr(ps, stat) + amt)
+            self.log(f"{st.name} taken: +{amt} {stat}!")
         else:
-            self.log("No health potions left.")
+            self.log("It fizzes and vanishes. Odd.")
+        self.inv.remove_item(st.item_id)
+
+    # ---------------------------------------------------------------- shops
+    def shop_def(self) -> dict:
+        """Data entry for the open shop (data/shops.json), or {}."""
+        return self.data.get("shops", {}).get(self.open_shop or "", {})
+
+    def shop_stock(self) -> list[dict]:
+        """Open shop's stock as flat rows: {id, kind, name, price, sprite}."""
+        out: list[dict] = []
+        for e in self.shop_def().get("items", []):
+            d = self.data["items"].get(e["id"], {})
+            out.append({"id": e["id"], "kind": "item",
+                        "price": int(e.get("price", 0)),
+                        "name": d.get("name", e["id"]),
+                        "sprite": d.get("sprite", "")})
+        for e in self.shop_def().get("weapons", []):
+            d = self.data["weapons"].get(e["id"], {})
+            out.append({"id": e["id"], "kind": "weapon",
+                        "price": int(e.get("price", 0)),
+                        "name": d.get("name", e["id"]),
+                        "sprite": d.get("sprite", "")})
+        return out
+
+    def open_shop_ui(self, shop_id: str) -> None:
+        """Enter the trade overlay at a shopkeeper's counter."""
+        if shop_id not in self.data.get("shops", {}):
+            self.log("The counter is quiet right now.")
+            return
+        self.open_shop = shop_id
+        self.shop_slot = 0
+        self.shop_pane = "stock"
+        self.phase = F.SHOP
+        self.log(self.shop_def().get("greeting", "Welcome."))
+
+    def close_shop_ui(self) -> None:
+        """Leave the shop overlay; return to the town phase."""
+        self.open_shop = None
+        self.phase = F.TOWN if self.area_id not in ("home", "outside") \
+            else (F.OUTSIDE if self.area_id == "outside" else F.HOME)
+
+    def buy_from_shop(self) -> None:
+        """Buy one of the selected stock row (E in the shop stock pane)."""
+        stock = self.shop_stock()
+        if not stock:
+            self.log('"Fresh stock\'s on the road, lad."')
+            return
+        self.shop_slot = min(max(0, self.shop_slot), len(stock) - 1)
+        e = stock[self.shop_slot]
+        if not self.inv.spend(e["price"]):
+            self.log("Not enough gold.")
+            return
+        if e["kind"] == "weapon":
+            w = self.inv.add_or_get_weapon(e["id"],
+                                           self.data["weapons"][e["id"]])
+            self.inv.equip(e["id"])
+            self.log(f"Bought {w.name} (-{e['price']}g) and equipped it!")
+        else:
+            self.inv.add_item(e["id"], 1, self.data["items"])
+            self.log(f"Bought {e['name']} (-{e['price']}g).")
+
+    def sell_to_shop(self) -> None:
+        """Sell one of the selected bag row (E in the shop bag pane).
+
+        Weapons and trophies are not sellable; anything with a 'value' in
+        items.json sells for 40% of it.
+        """
+        if not (0 <= self.shop_slot < len(self.inv.items)):
+            self.log("Nothing selected to sell.")
+            return
+        st = self.inv.items[self.shop_slot]
+        d = self.data["items"].get(st.item_id, {})
+        if d.get("kind") == "trophy" or "value" not in d:
+            self.log(f"Nobody in town would buy the {st.name}.")
+            return
+        price = max(1, round(d["value"] * 0.4))
+        self.inv.add_gold(price)
+        self.inv.remove_item(st.item_id)
+        self.shop_slot = min(self.shop_slot,
+                             max(0, len(self.inv.items) - 1))
+        self.log(f"Sold {st.name} (+{price}g).")
 
     def equip_weapon_slot(self, wid: str) -> None:
         """Equip a weapon from the inventory weapons dict."""
@@ -397,7 +514,7 @@ class GameState:
         back to front. Pure view-side; no protocol. Pauses whenever a
         chest/dialogue UI is open.
         """
-        if self.phase not in (F.HOME, F.OUTSIDE):
+        if self.phase not in (F.HOME, F.OUTSIDE, F.TOWN):
             return
         if self.open_dialogue is not None or self.open_chest is not None:
             return
@@ -413,7 +530,7 @@ class GameState:
                 "hop": random.uniform(0.0, 6.0),      # bob animation phase
             })
             nx, ny = n["x"] * tile, n["y"] * tile
-            if ((p.x - nx) ** 2 + (p.y - ny) ** 2) ** 0.5 <= tile * 2.5:
+            if ((p.x - nx) ** 2 + (p.y - ny) ** 2) ** 0.5 <= tile * 3.0:
                 # Attention: turn to the player and hold while they're near.
                 rt["face"] = 1 if p.x >= nx else -1
                 rt["glance"] = 0.0

@@ -1,19 +1,19 @@
 {
-  "character": "mage",
+  "character": "knight",
   "stats": {
-    "hp": 38,
-    "max_hp": 70,
-    "attack": 10,
-    "defense": 1,
-    "speed": 160
+    "hp": 50,
+    "max_hp": 120,
+    "attack": 12,
+    "defense": 4,
+    "speed": 150
   },
   "position": {
-    "area": "green_cave",
-    "x": 347.38006490793913,
-    "y": 32.34390412499684
+    "area": "home",
+    "x": 621,
+    "y": 626
   },
   "inventory": {
-    "gold": 195,
+    "gold": 281,
     "equipped": "rusty_sword",
     "weapons": {
       "rusty_sword": {
@@ -22,36 +22,32 @@
     },
     "items": [
       {
-        "id": "slime_gel",
+        "id": "magma_core",
         "qty": 2
-      },
-      {
-        "id": "imp_ember",
-        "qty": 2
-      },
-      {
-        "id": "bat_wing",
-        "qty": 1
-      },
-      {
-        "id": "bone_shard",
-        "qty": 1
-      },
-      {
-        "id": "magma_golem",
-        "qty": 1
       }
     ],
     "trophies": [
       "magma_golem"
     ]
   },
-  "chest_home": [],
+  "chest_home": [
+    {
+      "id": "health_potion",
+      "qty": 2
+    },
+    {
+      "id": "magma_core",
+      "qty": 1
+    }
+  ],
   "unlocked_characters": [
     "knight",
     "mage",
-    "ranger"
+    "ranger",
+    "rogue"
   ],
-  "rescued_npcs": [],
-  "time": "2026-11-25 11:47"
+  "rescued_npcs": [
+    "prisoner"
+  ],
+  "time": "2026-11-25 15:05"
 }

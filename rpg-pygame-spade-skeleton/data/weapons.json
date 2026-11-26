@@ -1,3 +1,6 @@
 {
-  "rusty_sword": {"name": "Rusty Sword", "damage": 6, "level": 1, "cost_per_level": 20, "sprite": "sword.png", "color": [200, 160, 90]}
+  "rusty_sword": {"name": "Rusty Sword", "damage": 6, "level": 1, "cost_per_level": 20, "sprite": "sword.png", "color": [200, 160, 90]},
+  "iron_sword": {"name": "Iron Sword", "damage": 12, "level": 1, "cost_per_level": 25, "sprite": "sword.png", "color": [180, 190, 210]},
+  "twin_daggers": {"name": "Twin Daggers", "damage": 9, "level": 1, "cost_per_level": 22, "sprite": "dagger.png", "color": [210, 210, 220]},
+  "war_axe": {"name": "War Axe", "damage": 18, "level": 1, "cost_per_level": 30, "sprite": "axe.png", "color": [180, 150, 120]}
 }
