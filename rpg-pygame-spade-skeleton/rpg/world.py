@@ -9,6 +9,7 @@ with data/furniture.json (TODO) — the API (solid/move/draw/nearest) stays.
 
 from __future__ import annotations
 
+import math
 import random
 from dataclasses import dataclass, field
 
@@ -67,12 +68,26 @@ class Scene:
             return self.walk[ty][tx] != "."
         return self.grid[ty][tx] == 1
 
-    def move(self, obj, dx: float, dy: float) -> None:
-        """Move entity by (dx, dy) respecting walls on each axis."""
-        if not self.solid(obj.x + dx, obj.y):
-            obj.x += dx
-        if not self.solid(obj.x, obj.y + dy):
-            obj.y += dy
+    def move(self, obj, dx: float, dy: float,
+             radius: float = 0.0) -> None:
+        """Move in short axis-aligned steps, allowing wall sliding."""
+        max_step = max(1.0, self.tile / 4)
+        steps = max(1, math.ceil(max(abs(dx), abs(dy)) / max_step))
+        step_x, step_y = dx / steps, dy / steps
+
+        for _ in range(steps):
+            if not self._solid_box(obj.x + step_x, obj.y, radius):
+                obj.x += step_x
+            if not self._solid_box(obj.x, obj.y + step_y, radius):
+                obj.y += step_y
+
+    def _solid_box(self, px: float, py: float, radius: float) -> bool:
+        """Check the actor center, edges and corners against the tile map."""
+        if radius <= 0:
+            return self.solid(px, py)
+        offsets = (-radius, 0.0, radius)
+        return any(self.solid(px + ox, py + oy)
+                   for ox in offsets for oy in offsets)
 
     def free_spot(self) -> tuple[float, float]:
         """Random walkable spot away from border."""

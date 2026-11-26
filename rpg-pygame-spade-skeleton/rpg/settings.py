@@ -30,8 +30,8 @@ class Settings:
     height: int = 720
     fps: int = 60
     tile: int = 32
-    # Render scale: Stardew proportions (~2 tiles tall on a 32px tile).
-    player_height: int = 72
+    # Stardew-like player frame: one tile wide and two tiles tall.
+    player_height: int = 64
     enemy_height: int = 64
     boss_height: int = 192
     hitbox_scale: float = 0.6  # collision box < sprite so movement feels fair

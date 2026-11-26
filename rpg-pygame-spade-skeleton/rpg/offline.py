@@ -35,6 +35,10 @@ class LocalDirector:
             t = ev.get("type")
             if t == "start_game":
                 gs.start_game()
+            elif t == "revive":
+                self.pending = 0
+                self.boss_active = False
+                self.attack_cd = 0.0
             elif t == "interact":
                 self._interact(ev)
             elif t == "mob_died":
@@ -49,17 +53,17 @@ class LocalDirector:
                 self.boss_active = False
         # 'TimeoutBehaviour' analogue: pick a boss attack every
         # 2.5s scaled by the current phase's cooldown multiplier.
-        if self.boss_active:
+        if self.boss_active and gs.phase != S.GAME_OVER:
             self.attack_cd += dt
             boss = gs.boss
             if boss and boss.alive and self.attack_cd >= 2.5 * boss.cd_mult():
                 self.attack_cd = 0.0
                 gs.apply({"type": "boss_attack",
                           "name": random.choice(boss.attack_list())})
-        # Death -> GAME_OVER handled inside GameState.apply (enemy_attack).
         if gs.phase == S.GAME_OVER:
-            gs.phase = S.HOME_BASE
-            gs.revive_at_base()
+            self.pending = 0
+            self.boss_active = False
+            self.attack_cd = 0.0
         if gs.phase == S.REWARD:
             # Auto-continue: back to base, or END when all bosses down.
             if gs.all_bosses_down():

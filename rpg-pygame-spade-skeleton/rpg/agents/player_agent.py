@@ -151,6 +151,9 @@ class AreaMobsState(BaseState):
     async def run(self) -> None:
         cleared = False
         for ev in self.drain():
+            if ev.get("type") == "player_died":
+                self.set_next_state("GAME_OVER")
+                return
             if ev.get("type") == "mob_died":
                 self.to_game(ev)
                 cleared = True
@@ -212,7 +215,7 @@ class GameOverState(BaseState):
 
     async def run(self) -> None:
         for ev in self.drain():
-            if ev.get("type") == "revive":
+            if ev.get("type") in ("revive", "start_game"):
                 self.to_game({"type": "phase", "phase": S.HOME_BASE, "area": "home"})
                 self.set_next_state("HOME_BASE")
                 return

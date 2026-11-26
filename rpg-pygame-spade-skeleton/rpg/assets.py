@@ -3,11 +3,9 @@
 Every sprite in the game goes through here so missing files never crash:
 a missing PNG becomes a colored rectangle with the entity's short label.
 
-Scaling (config.yaml `render:`): sprites are scaled proportionally to a
-target height (player 72px, enemy 64px, boss 192px on 1280x720 — Stardew
-proportions, ~2 tiles tall), keeping characters consistent with the tile
-size. Collision boxes use hitbox_scale separately (see state.py), staying
-smaller than the sprite.
+Scaling (config.yaml `render:`): player/NPC frames are fitted to one tile
+wide and the configured height; other sprites keep their source proportions.
+Collision boxes use hitbox_scale separately, staying smaller than the sprite.
 """
 
 from __future__ import annotations
@@ -27,10 +25,47 @@ class AssetManager:
     def __init__(self, tile: int = 32) -> None:
         self.tile = tile
         self._cache: dict[str, pygame.Surface] = {}
+        self._actor_cache: dict[str, pygame.Surface] = {}
         self._backgrounds: dict[str, pygame.Surface | None] = {}
         self._font_cache: Font | None = None
 
     # ------------------------------------------------------------------ sprites
+    def actor_sprite(self, subfolder: str, filename: str, height: int,
+                     facing: str, label: str = "?",
+                     color: tuple[int, int, int] | None = None
+                     ) -> pygame.Surface:
+        """Return a tile-width actor frame, using directional art when present."""
+        stem = Path(filename).stem
+        base_name = f"{stem}.png"
+        direction_name = f"{stem}_{facing}.png"
+        direction_path = ASSETS / subfolder / direction_name
+        mirror = False
+
+        if direction_path.exists():
+            chosen = direction_name
+        elif facing in ("left", "right"):
+            opposite = "right" if facing == "left" else "left"
+            opposite_name = f"{stem}_{opposite}.png"
+            if (ASSETS / subfolder / opposite_name).exists():
+                chosen = opposite_name
+                mirror = True
+            else:
+                chosen = base_name
+                mirror = facing == "left"
+        else:
+            chosen = base_name
+
+        key = f"{subfolder}/{chosen}@{self.tile}x{height}:{facing}:{mirror}"
+        if key not in self._actor_cache:
+            img = self.sprite(subfolder, chosen, height, label, color)
+            if mirror:
+                img = pygame.transform.flip(img, True, False)
+            target_size = (self.tile, height)
+            if img.get_size() != target_size:
+                img = pygame.transform.scale(img, target_size)
+            self._actor_cache[key] = img
+        return self._actor_cache[key]
+
     def sprite(self, subfolder: str, filename: str, height: int,
                label: str = "?", color: tuple[int, int, int] | None = None
                ) -> pygame.Surface:

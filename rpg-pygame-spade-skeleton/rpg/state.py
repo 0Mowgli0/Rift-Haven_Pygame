@@ -265,8 +265,10 @@ class GameState:
             if b and b.alive:
                 self.scene.move(b, ev["dx"], ev["dy"])
         elif et == "enemy_attack":
+            if self.phase == F.GAME_OVER:
+                return
             dmg = max(0, ev["damage"] - self.player.stats.defense)
-            self.player.stats.hp -= dmg
+            self.player.stats.hp = max(0, self.player.stats.hp - dmg)
             self.log(f"Hit for {dmg}!")
             if self.player.stats.hp <= 0:
                 self.phase = GAME_OVER
@@ -304,6 +306,8 @@ class GameState:
         Order: projectiles/combat, then per-kind mob behaviors, then boss
         (phase transitions + telegraph resolution).
         """
+        if self.phase == F.GAME_OVER:
+            return []
         events = CB.tick(self, dt)
         events += EN.tick_mobs(self, dt)
         events += EN.tick_boss(self, dt)

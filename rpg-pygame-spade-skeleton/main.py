@@ -40,8 +40,7 @@ MENU_ITEMS = ["New Game", "Continue", "Settings", "Quit"]
 SETTINGS_ITEMS = ["Volume", "Fullscreen", "Difficulty", "Back"]
 DIFFICULTIES = ["easy", "normal", "hard"]
 # Phases where the player controls a body in a scene.
-GAMEPLAY_PHASES = (F.HOME, F.OUTSIDE, F.TOWN, F.AREA_MOBS, F.BOSS_FIGHT,
-                   F.UPGRADE, F.INVENTORY)
+GAMEPLAY_PHASES = (F.HOME, F.OUTSIDE, F.TOWN, F.AREA_MOBS, F.BOSS_FIGHT)
 # Area id -> phase when arriving through a door/gate (everything else is
 # part of the peaceful town group -> TOWN).
 _AREA_PHASE = {"home": F.HOME, "outside": F.OUTSIDE}
@@ -77,8 +76,9 @@ def main() -> None:
     world_surf = pygame.Surface((settings.width, settings.height))
 
     running = True
+    game_over_reported = False
     while running:
-        dt = clock.tick(settings.fps) / 1000.0
+        dt = min(clock.tick(settings.fps) / 1000.0, 0.05)
         intents: list[dict] = []
         # ---------------------------------------------------------- input
         for ev in pygame.event.get():
@@ -92,6 +92,10 @@ def main() -> None:
                         gs.trophy_menu = False
                     elif gs.phase == F.START_MENU:
                         running = False
+                    elif gs.phase == F.INVENTORY:
+                        gs.phase = (F.HOME if gs.area_id == "home"
+                                    else F.OUTSIDE if gs.area_id == "outside"
+                                    else F.TOWN)
                     elif gs.phase == F.PAUSED:
                         gs.phase = gs.paused_from or F.HOME
                     elif gs.phase == F.GAME_OVER:
@@ -155,6 +159,8 @@ def main() -> None:
                         gs.select_character(char_order[char_idx])
                         if gs.character_id == char_order[char_idx]:
                             gs.start_game()  # FSM: -> HOME
+                            if agents:
+                                intents.append({"type": "start_game"})
                     elif k == pygame.K_BACKSPACE:
                         gs.phase = F.START_MENU
 
@@ -250,7 +256,7 @@ def main() -> None:
 
                 # -- inventory ---------------------------------------------
                 elif gs.phase == F.INVENTORY:
-                    if k in (pygame.K_i, pygame.K_ESCAPE):
+                    if k == pygame.K_i:
                         gs.phase = (F.HOME if gs.area_id == "home"
                                     else F.OUTSIDE if gs.area_id == "outside"
                                     else F.TOWN)
@@ -287,6 +293,7 @@ def main() -> None:
                 # -- game over / reward -----------------------------------
                 elif gs.phase == F.GAME_OVER and k == pygame.K_RETURN:
                     gs.revive_at_base()
+                    intents.append({"type": "revive"})
                 elif gs.phase == F.REWARD and k == pygame.K_RETURN:
                     intents.append({"type": "continue",
                                     "collected": gs.inv.collected_bosses})
@@ -332,14 +339,20 @@ def main() -> None:
         spd = gs.player.stats.speed * dt
         dx = (keys[pygame.K_RIGHT] or keys[pygame.K_d]) - (keys[pygame.K_LEFT] or keys[pygame.K_a])
         dy = (keys[pygame.K_DOWN] or keys[pygame.K_s]) - (keys[pygame.K_UP] or keys[pygame.K_w])
-        if gs.phase not in (F.START_MENU, F.SETTINGS, F.CHARACTER_SELECT,
-                            F.PAUSED, F.END, F.UPGRADE, F.INVENTORY, F.SHOP) \
-                and gs.open_chest is None and gs.open_dialogue is None:
-            gs.scene.move(gs.player, dx * spd, dy * spd)
+        movement = pygame.Vector2(dx, dy)
+        if movement.length_squared():
+            movement.normalize_ip()
+            dx, dy = movement
+        if gs.phase in GAMEPLAY_PHASES and gs.open_chest is None \
+                and gs.open_dialogue is None:
+            gs.scene.move(gs.player, dx * spd, dy * spd,
+                          radius=gs.s.tile * 0.2)
             # Idle-life bookkeeping for the player sprite (see ui.draw_world):
-            # reset the idle timer while moving, note last horizontal facing.
+            # reset the idle timer while moving and update facing.
             if dx or dy:
                 gs.idle_t = 0.0
+                gs.player.facing = (1 if dy < 0 else 0) if dy else \
+                    (2 if dx < 0 else 3)
                 if dx:
                     gs.player_face = 1 if dx > 0 else -1
             else:
@@ -363,6 +376,12 @@ def main() -> None:
                 bridge.send_to_agents(it)
             while (ev := bridge.recv_from_agents()) is not None:
                 gs.apply(ev)            # SPADE thread -> pygame
+        if gs.phase == F.GAME_OVER and not game_over_reported:
+            if agents:
+                bridge.send_to_agents({"type": "player_died"})
+            game_over_reported = True
+        elif gs.phase != F.GAME_OVER:
+            game_over_reported = False
 
         # ---------------------------------------------------------- draw
         if gs.phase == F.START_MENU:

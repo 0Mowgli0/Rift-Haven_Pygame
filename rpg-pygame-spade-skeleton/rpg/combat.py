@@ -185,12 +185,15 @@ def _collide(gs, prj) -> tuple[bool, list[dict]]:
 
 def player_hit(gs, damage: int, sx: float, sy: float, label: str = "") -> None:
     """One hit lands on the player (enemy contact or projectile)."""
+    if gs.phase == F.GAME_OVER:
+        return
     dmg = max(1, damage - gs.player.stats.defense)
-    gs.player.stats.hp -= dmg
+    gs.player.stats.hp = max(0, gs.player.stats.hp - dmg)
     gs.player.flash = 0.14
     dx, dy = gs.player.x - sx, gs.player.y - sy
     d = math.hypot(dx, dy) or 1.0
-    gs.scene.move(gs.player, dx / d * 26, dy / d * 26)
+    gs.scene.move(gs.player, dx / d * 26, dy / d * 26,
+                  radius=gs.s.tile * 0.2)
     gs.texts.append(FloatingText(gs.player.x, gs.player.y - 44, str(dmg),
                                  (255, 90, 90)))
     gs.shake = max(gs.shake, 0.15)
